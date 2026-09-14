@@ -1,6 +1,29 @@
+<div align="center">
+
+<img src="assets/wifi-red.svg" alt="AURIS.net WiFi Red Logo" width="120" />
+
 # AURIS.net
 
-Framework modular de auditoria y evaluacion de seguridad inalambrica en routers y CPEs domesticos, disenado para investigacion academica y auditorias tecnicas controladas (Wifite4 Architecture Upgrade).
+```text
+┌──(auris㉿kali)-[~/AURIS.net]
+└─$ sudo auris --status --version 2.1.0-wifite4
+
+  █████╗ ██╗   ██╗██████╗ ██╗███████╗   ███╗   ██╗███████╗████████╗
+ ██╔══██╗██║   ██║██╔══██╗██║██╔════╝   ████╗  ██║██╔════╝╚══██╔══╝
+ ███████║██║   ██║██████╔╝██║███████╗   ██╔██╗ ██║█████╗     ██║   
+ ██╔══██║██║   ██║██╔══██╗██║╚════██║   ██║╚██╗██║██╔══╝     ██║   
+ ██║  ██║╚██████╔╝██║  ██║██║███████║██╗██║ ╚████║███████╗   ██║   
+ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   
+
+ [+] TRANSCEIVER HAL : 12 Chipsets Supported (Atheros / Realtek / MTK / Intel)
+ [+] ORCHESTRATION   : Decoupled Phase Engine (Capture / WPS / PSK / LAN / RoE)
+ [+] INTELLIGENCE    : Smart Candidate Generator & ISP Fleet Knowledge Base
+ [+] DEFENSE MONITOR : Active WIDS Sensor & Push-Button (PBC) Event Detector
+```
+
+**Framework modular de auditoria y evaluacion de seguridad inalambrica en routers y CPEs domesticos (Wifite4 Architecture Upgrade)**
+
+</div>
 
 ## Descripcion
 

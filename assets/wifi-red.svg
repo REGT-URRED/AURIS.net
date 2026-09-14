@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="140" height="140">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2b0d0d" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#0a0a0c" stop-opacity="0.95"/>
+    </radialGradient>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff3344"/>
+      <stop offset="50%" stop-color="#e60026"/>
+      <stop offset="100%" stop-color="#990012"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background Hexagon/Shield Base -->
+  <rect width="200" height="200" rx="36" fill="url(#bgGlow)" stroke="#3d1414" stroke-width="2"/>
+
+  <!-- Outer WiFi Arc -->
+  <path d="M 36 78 A 95 95 0 0 1 164 78" 
+        fill="none" 
+        stroke="url(#redGrad)" 
+        stroke-width="12" 
+        stroke-linecap="round"
+        filter="url(#glow)"/>
+
+  <!-- Middle WiFi Arc -->
+  <path d="M 58 104 A 65 65 0 0 1 142 104" 
+        fill="none" 
+        stroke="url(#redGrad)" 
+        stroke-width="12" 
+        stroke-linecap="round"
+        filter="url(#glow)"/>
+
+  <!-- Inner WiFi Arc -->
+  <path d="M 80 130 A 35 35 0 0 1 120 130" 
+        fill="none" 
+        stroke="url(#redGrad)" 
+        stroke-width="12" 
+        stroke-linecap="round"
+        filter="url(#glow)"/>
+
+  <!-- Center Dot -->
+  <circle cx="100" cy="156" r="10" 
+          fill="url(#redGrad)" 
+          filter="url(#glow)"/>
+</svg>

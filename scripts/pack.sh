@@ -78,6 +78,7 @@ PACK_ITEMS=(./setup.sh ./auris.py ./requirements.txt ./LEEME-USB.txt
             ./src ./config ./scripts ./tests)
 if [[ -f ./README.md ]]; then PACK_ITEMS+=(./README.md); fi
 if [[ -f ./CHANGELOG.md ]]; then PACK_ITEMS+=(./CHANGELOG.md); fi
+if [[ -d ./assets ]]; then PACK_ITEMS+=(./assets); fi
 if [[ -d ./data ]]; then PACK_ITEMS+=(./data); fi
 if [[ "$CODE_ONLY" -eq 0 && -d ./offline_bundle ]]; then PACK_ITEMS+=(./offline_bundle); fi
 
