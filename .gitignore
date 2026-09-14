@@ -28,6 +28,12 @@ data/sessions/
 *.log
 *.tmp
 
+# Planes, notas de investigación y contexto temporal
+*plan*.md
+analisis_*.md
+propuesta_*.md
+*.scratch.md
+
 # Wordlists reales (no se versionan — sólo la lógica de generación)
 offline_bundle/
 *.wordlist
