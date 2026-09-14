@@ -53,31 +53,58 @@ AURIS.net/
 
 ## Instalacion y Puesta en Marcha
 
-### Modo Desarrollo / Entorno Virtual
+### Despliegue en Kali Linux (Offline en Campo)
 
-1. Clonar el repositorio:
+Para auditorias en estaciones aisladas sin acceso a internet utilizando el paquete autonomo `auris-kali.tar.gz` (incluye 118 paquetes .deb, wheels de Python y wordlists):
+
+1. Extraer el paquete y ejecutar el instalador desatendido:
+   ```bash
+   mkdir -p ~/auris && tar xzf auris-kali.tar.gz -C ~/auris && cd ~/auris
+   sudo bash setup.sh
+   ```
+   El script `setup.sh` instala automaticamente las herramientas de radio, configura las dependencias de Python, inicializa la base de datos SQLite y registra el comando global `/usr/local/bin/auris`.
+
+2. Configurar el alcance de auditoria:
+   ```bash
+   cp config/scope.example.yml config/scope.yml
+   nano config/scope.yml
+   # Definir los BSSIDs autorizados y la ventana de tiempo (time_window)
+   ```
+
+3. Verificar el estado del entorno y hardware:
+   ```bash
+   sudo auris doctor
+   sudo auris hal
+   ```
+
+4. Ejecutar la auditoria:
+   ```bash
+   # Simulacion previa sin transmisiones de radio
+   sudo auris run-all --dry-run
+
+   # Auditoria autorizada en el espectro (requiere interfaz en modo monitor)
+   sudo auris run-all --force-roe --iface wlan0
+   ```
+
+### Despliegue en Kali Linux / Debian (Con Conexion a Internet)
+
+1. Instalar herramientas de radio del sistema:
+   ```bash
+   sudo apt update
+   sudo apt install -y aircrack-ng hcxdumptool hcxtools reaver bully pixiewps iw macchanger wireless-tools python3-venv python3-pip
+   ```
+
+2. Clonar el repositorio y configurar el entorno:
    ```bash
    git clone https://github.com/REGT-URRED/AURIS.net.git
    cd AURIS.net
-   ```
-
-2. Crear y activar el entorno virtual:
-   ```bash
    python3 -m venv venv
    source venv/bin/activate
-   ```
-
-3. Instalar dependencias:
-   ```bash
    pip install -r requirements.txt
-   ```
-
-4. Inicializar la base de datos local:
-   ```bash
    python3 auris.py db-init
    ```
 
-5. Configurar el archivo de alcance (RoE):
+3. Configurar el archivo de alcance (RoE):
    ```bash
    cp config/scope.example.yml config/scope.yml
    # Editar config/scope.yml con los BSSIDs autorizados y ventana temporal
