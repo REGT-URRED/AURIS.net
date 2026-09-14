@@ -20,9 +20,6 @@ from .base import (
     STATUS_TIMEOUT, STATUS_SKIPPED, STATUS_DONE, STATUS_ERROR,
 )
 
-# STATUS_EXHAUSTED no existe en base.py — lo añadimos localmente
-STATUS_EXHAUSTED = "exhausted"
-
 TIMEOUTS = {"PSK_SSID_LOGIC": 300, "PSK_ROCKYOU": 900}
 
 

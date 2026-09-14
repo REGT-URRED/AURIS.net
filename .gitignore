@@ -23,16 +23,18 @@ reports/*.json
 reports/*.md
 
 # Archivos de sesión y temporales
+data/sessions/
 *.session
 *.log
 *.tmp
 
 # Wordlists reales (no se versionan — sólo la lógica de generación)
-offline_bundle/wordlists/
+offline_bundle/
 *.wordlist
 
 # Bundle de instalación pesado
 auris-kali.tar.gz
+auris-*.tar.gz
 
 # Scope con datos de red real (solo plantilla, no el scope real)
 config/scope.yml

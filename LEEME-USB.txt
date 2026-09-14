@@ -1,0 +1,97 @@
+AURIS v2.1.0-wifite4 — Puesta en marcha desde USB (Kali Linux offline)
+=====================================================================
+
+REQUISITO: este paquete debe incluir offline_bundle/ para campo SIN
+internet. Si solo trae código, primero pásalo por una Kali CON internet
+(OPCIÓN A). Si ya trae offline_bundle/ (109 MB, 118 .deb + 27 wheels +
+rockyou), ve directo a la OPCIÓN B.
+
+COMANDO ÚNICO (copiar y pegar en Kali, una sola línea):
+  cd /media/$USER/Ventoy/AURIS && mkdir -p ~/auris && tar xzf auris-kali.tar.gz -C ~/auris && cd ~/auris && sudo bash setup.sh
+  (setup.sh instala los 118 .deb + wheels, crea el comando 'auris', genera
+  scope.yml con tu interfaz auto-detectada e inicializa la BD. No pide nada.)
+  Después SOLO edita config/scope.yml (BSSIDs reales + time_window) y ejecuta:
+  sudo auris run-all --dry-run && sudo auris run-all --force-roe
+
+DÓNDE ESTÁ EL PAQUETE EN EL USB (Ventoy):
+  El .tar.gz y este txt están en la carpeta AURIS de la partición del USB.
+  En Kali aparece como: /media/<usuario>/Ventoy/AURIS/
+  Si el glob no encuentra nada, entra a esa carpeta antes de extraer:
+    cd /media/$USER/Ventoy/AURIS
+
+OPCIÓN A — Generar el bundle (una sola vez, con internet):
+  1. mkdir -p ~/auris && tar xzf auris-*.tar.gz -C ~/auris && cd ~/auris
+  2. sudo bash scripts/bootstrap.sh
+  3. python3 auris.py verify-rockyou   (esperado: ~14.34M líneas)
+  4. bash scripts/pack.sh auris-kali   (genera auris-kali.tar.gz FULL para USB)
+
+OPCIÓN B — Instalación en campo (offline):
+  1. cd /media/$USER/Ventoy/AURIS
+     mkdir -p ~/auris && tar xzf auris-*.tar.gz -C ~/auris && cd ~/auris
+  2. sudo bash setup.sh                (instala todo .deb + wheels + comando 'auris')
+  3. Edita config/scope.yml: BSSIDs reales, institución, ventana time_window
+     Opcional: cp data/vendor_map.example.json data/vendor_map.json y fija
+     los OUI de tus routers; define lab_lan_gateway para auditoría LAN.
+  4. python3 auris.py db-init          (crea la BD; sin esto doctor marca WARN)
+  5. sudo auris doctor                 (sin ERROR salvo radio/hashcat)
+  6. sudo auris hal                    (auditoría de chipsets WiFi y USB detectados)
+  7. sudo auris run-all --dry-run      (ver paths sin tocar el aire)
+  8. sudo auris run-all --force-roe    (auditoría real; requiere scope firmado)
+     Solo-LAN extra: sudo auris run-all --force-roe --allow-lan
+  Nota: los pasos 2, 5, 6, 7 y 8 van con sudo; para la parte aérea real hace falta
+  un adaptador WiFi con modo monitor conectado antes del paso 7.
+
+COMANDOS ÚTILES (AURIS + Wifite4):
+  sudo auris hal                               inventario de hardware HAL (12 chipsets WiFi)
+  python3 auris.py candidates "SSID"           generador heurístico de candidatos (Wifite4)
+  sudo auris run-all --dry-run --resume-last   continuar sesión interrumpida
+  python3 auris.py verify-rockyou              validar wordlist del bundle
+  ls data/sessions/                            sesiones guardadas
+
+MATRIZ DE CAPACIDAD (Kali mínima, sin herramientas de radio):
+  NUEVA ARQUITECTURA WIFITE4 (v2.1.0):
+    - HAL Userland: soporte y auto-detección para 12 chipsets (Atheros AR9271,
+      Realtek RTL8812AU/RTL8187L/RTL8814AU/RTL8821, MediaTek MT7601U/MT7610U/MT7612U/MT7921,
+      Ralink RT3070/RT5370, Intel iwlwifi).
+    - Pipeline Modular: desacoplamiento en fases independientes (Capture, WPS
+      Pixie/PIN/PBC, PSK Cracker, RoE Governance, LAN Audit).
+    - Generador Heurístico: mutación por familias de SSID, tokens ISP, números
+      y fragmentos de BSSID específicos para routers domésticos.
+    - Sensor WIDS: detector de ventanas activas WPS Push-Button (PBC) y alertas.
+  FUNCIONA SIEMPRE: intel de fabricante + 13 zerodays en informe, EOL/DPP,
+    wordlists SSID+familiares, auditoría LAN (--allow-lan), reportes, BD,
+    sesiones reanudables, doctor, verify-rockyou, hal, candidates.
+  EL BUNDLE YA TRAE (118 .deb): hcxdumptool, hcxtools/hcxpcapngtool, aircrack-ng,
+    reaver+wash, bully y pixiewps (motor dual para Pixie Dust: reaver -K o
+    bully -d según lo que traiga la Kali), iw, macchanger, wireless-tools,
+    ethtool, rfkill, pciutils, usbutils, curl y python3.11-venv 3.11.9 con TODAS
+    sus dependencias (incluye libgcrypt20 y la cadena de hwloc/libX11 que exige
+    aircrack-ng).
+    setup.sh los instala solo, sin red, y descarta antes cualquier .deb que pida
+    una glibc mayor que la de tu sistema (así nunca deja dpkg a medias).
+    Así la captura PMKID/handshake y WPS ya no quedan omitidas.
+  hashcat es OPCIONAL: no va en el bundle porque arrastra OpenCL+LLVM (~180 MB).
+    Sin él, AURIS crackea igual con aircrack-ng (que SÍ va incluido) usando las
+    wordlists de lógica de SSID y rockyou — solo más lento. Si quieres hashcat
+    (GPU), una vez con red: sudo apt install hashcat
+
+SI ALGO FALLA:
+  - setup.sh pide bootstrap  -> el USB no trae bundle: vuelve a opción A.
+  - "time stamp ... in the future" al extraer -> cosmético (reloj del equipo
+    desfasado); no afecta. Corrige el reloj si puedes (importa para TLS).
+  - hcxdumptool/hcxtools siguen ausentes tras setup.sh -> tu Kali no es de la
+    serie 2024.x (glibc/python distinta): los .deb del bundle son de Kali 2024.2.
+    Instala una vez con red (sudo apt install hcxdumptool hcxtools) o regenera el
+    bundle desde TU versión con scripts/bootstrap.sh y vuelve a empaquetar.
+  - setup.sh dice ".deb omitidos (exigen libc6 mayor)" -> tu glibc es más antigua
+    que la del bundle; esos paquetes concretos no se instalan (a propósito) para
+    no romper dpkg. El resto sí entra.
+  - Sin python3-venv -> setup.sh usa el Python del sistema automáticamente
+    (modo sin-venv); es normal en Kali mínima, no es error.
+  - doctor marca radio ERROR -> normal sin adaptador WiFi; consigue uno con
+    modo monitor (chipset Atheros/Realtek) para campo real.
+  - doctor marca hashcat ERROR -> no es bloqueante: el crackeo PSK usa aircrack-ng
+    (incluido en el bundle). hashcat solo aporta velocidad con GPU.
+  - RoE BLOQUEO ventana      -> ajusta time_window en scope.yml a la fecha real.
+  - RoE BLOQUEO dry_run      -> añade --force-roe al run-all (firma la autorización):
+    sudo auris run-all --force-roe

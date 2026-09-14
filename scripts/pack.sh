@@ -77,6 +77,9 @@ info "Empaquetando en: $OUTPUT_FILE"
 PACK_ITEMS=(./setup.sh ./auris.py ./requirements.txt ./LEEME-USB.txt
             ./src ./config ./scripts ./tests)
 if [[ -f ./README.md ]]; then PACK_ITEMS+=(./README.md); fi
+if [[ -f ./CHANGELOG.md ]]; then PACK_ITEMS+=(./CHANGELOG.md); fi
+if [[ -f ./analisis_auris_wifite2_wifit3.md ]]; then PACK_ITEMS+=(./analisis_auris_wifite2_wifit3.md); fi
+if [[ -f ./propuesta_arquitectura_wifite4.md ]]; then PACK_ITEMS+=(./propuesta_arquitectura_wifite4.md); fi
 if [[ -d ./data ]]; then PACK_ITEMS+=(./data); fi
 if [[ "$CODE_ONLY" -eq 0 && -d ./offline_bundle ]]; then PACK_ITEMS+=(./offline_bundle); fi
 

@@ -1,0 +1,18 @@
+oui,brand,oem_group,country_hint,vdp_url,contact,notes
+00:1C:DF,Askey Computer Corp.,CPE-ISP,Taiwan,,security@askey.com.tw,OEM gateways para operadores — WPS habilitado de fábrica en familias conocidas
+00:1F:9F,Askey Computer Corp.,CPE-ISP,Taiwan,,security@askey.com.tw,CPE ISP — firmware suele ir bloqueado por el ISP
+AC:CC:8A,Askey Computer Corp.,CPE-ISP,Taiwan,,security@askey.com.tw,Serie gateways FTTH/DOCSIS
+74:DA:88,Edimax Technology Co.,CPE-Consumer,Taiwan,,,Routers domésticos — WPS v1 frecuente
+00:1F:1F,Zyxel Communications,CPE-ISP,Taiwan,https://www.zyxel.com/security,security@zyxel.com.tw,OEM ISP — gateways y ADSL
+D4:CA:6D,TP-Link Technologies,CPE-Consumer,China,,security@tp-link.com,Marca blanca frecuente en ISPs latinoamericanos
+50:C7:BF,TP-Link Technologies,CPE-Consumer,China,,security@tp-link.com,
+54:AF:97,Huawei Technologies,CPE-ISP,China,,psirt@huawei.com,ONT/CPE ISP — firmware ISP locked habitual
+48:46:FB,Huawei Technologies,CPE-ISP,China,,psirt@huawei.com,
+00:E0:FC,Huawei Technologies,CPE-ISP,China,,psirt@huawei.com,
+C8:3A:35,Tenda Technology,CPE-Consumer,China,,,Gama baja — WPS v1 común
+00:26:5A,Gemtek Technology,CPE-ISP,Taiwan,,,OEM frecuente marca blanca ISP — coincidencia alta con Askey en campo
+00:11:74,Gemtek Technology,CPE-ISP,Taiwan,,,
+00:1E:10,Arcadyan Technology,CPE-ISP,Taiwan,,,OEM ISP — gateways xDSL y cable
+00:90:D0,Arcadyan Technology,CPE-ISP,Taiwan,,,
+2C:B0:5D,Sagemcom,CPE-ISP,France,https://www.sagemcom.com,psirt@sagemcom.com,OEM ISP — CPE FTTH/cable Europa y Latinoamérica
+00:23:7D,Sagemcom,CPE-ISP,France,https://www.sagemcom.com,psirt@sagemcom.com,

@@ -1,0 +1,8 @@
+{
+  "_nota": "Mapa OUI->marca de LOS 5 ROUTERS DEL LABORATORIO. Copiar a vendor_map.json y ajustar con los OUI reales vistos en el scan. Tiene prioridad sobre la heurística interna.",
+  "00:1C:DF": "Askey",
+  "28:6C:07": "MitraStar",
+  "9C:C7:A6": "Huawei",
+  "D4:CA:6D": "TP-Link",
+  "02:0F:B5": "Unknown"
+}

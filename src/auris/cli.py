@@ -246,6 +246,98 @@ def verify_rockyou(
         raise typer.Exit(1)
 
 
+@app.command(name="hal")
+def hal_command():
+    """
+    Muestra información de la capa de abstracción de hardware (HAL Wifite4):
+    chipsets reconocidos (Atheros, Realtek, Mediatek, Ralink, Intel) y adaptadores detectados.
+    """
+    from rich.table import Table
+    from .hal import detect_adapters, CHIPSET_REGISTRY
+
+    console.print(Rule("[bold cyan]HAL — Hardware Abstraction Layer (Wifite4)[/bold cyan]", style="cyan"))
+
+    # 1. Adaptadores detectados
+    adapters = detect_adapters()
+    console.print(f"\n[bold]Adaptadores detectados:[/bold] {len(adapters)}")
+    if adapters:
+        table_adapters = Table(show_header=True, header_style="bold cyan")
+        table_adapters.add_column("ID USB", style="dim")
+        table_adapters.add_column("Fabricante")
+        table_adapters.add_column("Producto")
+        table_adapters.add_column("Chipset")
+        table_adapters.add_column("Bandas")
+        table_adapters.add_column("Monitor", justify="center")
+        table_adapters.add_column("Inyección", justify="center")
+        for a in adapters:
+            mon = "[green]SÍ[/green]" if a.supports_monitor else "[red]NO[/red]"
+            inj = "[green]SÍ[/green]" if a.supports_injection else "[red]NO[/red]"
+            table_adapters.add_row(
+                a.usb_id,
+                a.manufacturer,
+                a.product_name,
+                a.chipset,
+                "/".join(a.bands),
+                mon,
+                inj,
+            )
+        console.print(table_adapters)
+    else:
+        console.print("  [dim]Sin adaptadores USB wireless detectados activamente.[/dim]")
+
+    # 2. Catálogo de chipsets soportados
+    console.print(f"\n[bold]Catálogo de Chipsets Soportados ({len(CHIPSET_REGISTRY)} modelos):[/bold]")
+    table_chipsets = Table(show_header=True, header_style="bold cyan")
+    table_chipsets.add_column("USB ID", style="dim")
+    table_chipsets.add_column("Chipset", style="bold")
+    table_chipsets.add_column("Fabricante")
+    table_chipsets.add_column("Producto Conocido")
+    table_chipsets.add_column("Bandas")
+    table_chipsets.add_column("Inyección", justify="center")
+    for (vid, pid), c in CHIPSET_REGISTRY.items():
+        inj = "[green]SÍ[/green]" if c.supports_injection else "[red]NO[/red]"
+        bands = "/".join(c.bands)
+        table_chipsets.add_row(
+            c.usb_id,
+            c.chipset,
+            c.manufacturer,
+            c.product_name,
+            bands,
+            inj,
+        )
+    console.print(table_chipsets)
+
+
+@app.command(name="candidates")
+def candidates_command(
+    ssid: str = typer.Argument(..., help="SSID para generar candidatos"),
+    bssid: str = typer.Option("00:11:22:33:44:55", help="BSSID de referencia"),
+    brand: Optional[str] = typer.Option(None, help="Fabricante del AP (opcional)"),
+    limit: int = typer.Option(30, help="Límite de candidatos a mostrar"),
+):
+    """
+    Genera candidatos heurísticos de clave WiFi para investigación (Wifite4).
+    """
+    from rich.table import Table
+    from .generator import generate_candidates
+
+    console.print(Rule(f"[bold cyan]Generador Heurístico — {ssid}[/bold cyan]", style="cyan"))
+    cset = generate_candidates(ssid=ssid, bssid=bssid, brand=brand, max_candidates=limit)
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Candidato", style="bold green")
+    table.add_column("Longitud", justify="right")
+
+    cand_list = list(cset.all_candidates())[:limit]
+    for i, cand in enumerate(cand_list, 1):
+        table.add_row(str(i), cand, str(len(cand)))
+
+    console.print(table)
+    gen_time = cset.meta.get("generation_timestamp", "?")
+    console.print(f"\n  [dim]Total generados: {cset.total} | SSID: {cset.ssid} | Semillas: {gen_time}[/dim]")
+
+
 @app.command(name="run-all")
 def run_all(
     iface: str = typer.Option("wlan0", help="Interfaz WiFi (modo monitor) para Red Team"),

@@ -39,8 +39,12 @@ STATUS_LOCKED           = "locked"            # AP detectó lockout / rate-limit
 STATUS_NOT_FOUND        = "not_found"         # fase completada sin resultado útil
 STATUS_TIMEOUT          = "timeout"           # fase expiró su presupuesto de tiempo
 STATUS_SKIPPED          = "skipped"           # fase omitida (herramienta ausente o condición)
+STATUS_EXHAUSTED        = "exhausted"         # wordlist o espacio de búsqueda agotado sin éxito
 STATUS_DONE             = "done"              # fase informativa completada
 STATUS_ERROR            = "error"             # excepción inesperada
+
+
+
 
 
 @dataclass
