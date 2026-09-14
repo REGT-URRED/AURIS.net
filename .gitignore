@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Datos de runtime (nunca versionar capturas ni hashes de redes reales)
+data/auris.db
+data/rockyou.txt
+data/*.pcapng
+data/*.cap
+data/*.hc22000
+evidence/*.pcapng
+evidence/*.cap
+evidence/*.hc22000
+reports/*.json
+reports/*.md
+
+# Archivos de sesión y temporales
+*.session
+*.log
+*.tmp
+
+# Wordlists reales (no se versionan)
+offline_bundle/wordlists/
+*.wordlist
+
+# Bundle de instalación pesado
+auris-kali.tar.gz
+
+# Scope con datos de red real (solo plantilla, no el scope real)
+config/scope.yml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# pytest cache
+.pytest_cache/

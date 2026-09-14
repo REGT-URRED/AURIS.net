@@ -1,0 +1,44 @@
+study_title: "AURIS v2 — estudio CPE laboratorio"
+institution: "[universidad]"
+supervisor: "[docente]"
+student: "[nombre]"
+lab_owned: true
+authorization: "roe-firmado.pdf"
+
+# Lista blanca de BSSID autorizados (añadir aquí los del laboratorio)
+allowed_bssids:
+  - "aa:bb:cc:dd:ee:ff"
+
+allowed_ssids:
+  - "LAB-AURIS"
+  - "LAB-AURIS_2"
+
+# Ventana de tiempo de autorización (ISO 8601)
+time_window: "2026-09-12/2026-12-15"
+
+# Seguridad operacional
+forbid_mac_rotation: true
+dry_run_default: true
+
+# Interfaces a usar
+iface_red_team: "wlan0"    # Interfaz para ataques (modo monitor)
+iface_blue_team: "wlan1"   # Interfaz WIDS (modo monitor, opcional)
+
+# Contactos para divulgación
+disclosure:
+  oem_contact: "[completar — ej. security@askey.com.tw]"
+  isp_contact: "[completar]"
+  cert_contact: "[completar — ej. cert@cert.py]"
+  embargo_days: 90
+
+# Wordlists (se detectan automáticamente si están en la ruta estándar)
+wordlist_rockyou: "/usr/share/wordlists/rockyou.txt"
+wordlist_ssid_logic: "offline_bundle/wordlists/ssid_logic_template.txt"
+
+# Base de datos
+db_path: "data/auris.db"
+
+# Gateway LAN del laboratorio para AUDIT_LAN_SURFACE (solo lectura de banners).
+# Solo IPs privadas (RFC1918). Requiere --allow-lan explícito en cada ejecución.
+# Ejemplo: lab_lan_gateway: "192.168.1.1"
+lab_lan_gateway: ""
