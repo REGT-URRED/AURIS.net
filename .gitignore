@@ -12,15 +12,13 @@ venv/
 .venv/
 env/
 
-# Datos de runtime (nunca versionar capturas ni hashes de redes reales)
+# Datos de runtime
 data/auris.db
 data/rockyou.txt
 data/*.pcapng
 data/*.cap
 data/*.hc22000
-evidence/*.pcapng
-evidence/*.cap
-evidence/*.hc22000
+evidence/
 reports/*.json
 reports/*.md
 
@@ -29,7 +27,7 @@ reports/*.md
 *.log
 *.tmp
 
-# Wordlists reales (no se versionan)
+# Wordlists reales (no se versionan — sólo la lógica de generación)
 offline_bundle/wordlists/
 *.wordlist
 
@@ -47,3 +45,5 @@ config/scope.yml
 
 # pytest cache
 .pytest_cache/
+.coverage
+htmlcov/
