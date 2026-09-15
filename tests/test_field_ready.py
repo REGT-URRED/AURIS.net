@@ -37,10 +37,15 @@ def test_deep_count_compressed_refuses(tmp_path):
     assert deep_count(str(p))["status"] == "compressed"
 
 
-def test_find_rockyou_override(tmp_path):
+def test_find_rockyou_override(tmp_path, monkeypatch):
     p = tmp_path / "custom.txt"
     p.write_text("x\n")
     assert find_rockyou("/noexiste", str(p)) == str(p)
+    # Hermético: en una Kali con setup completo existe
+    # /usr/share/wordlists/rockyou.txt; ocultarlo para probar el caso "nada".
+    real_isfile = os.path.isfile
+    monkeypatch.setattr(os.path, "isfile",
+                        lambda q: False if q == "/usr/share/wordlists/rockyou.txt" else real_isfile(q))
     assert find_rockyou("/noexiste", "") is None
 
 

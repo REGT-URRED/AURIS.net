@@ -81,6 +81,14 @@ esac
 # ── FASE 1: Paquetes del sistema ───────────────────────────────────────────────
 step "FASE 1/8 — Herramientas del Sistema"
 
+# Preseed debconf para instalación 100% desatendida (corrige bloqueo en macchanger
+# que preguntaba "Change MAC automatically?" y colgaba setup.sh sin TTY).
+if command -v debconf-set-selections >/dev/null 2>&1; then
+    echo "macchanger macchanger/automatically_change_mac boolean false" | debconf-set-selections 2>>"$LOG_FILE" || true
+fi
+export DEBIAN_FRONTEND=noninteractive
+export UCF_FORCE_CONFFOLD=1
+
 APT_INSTALLED=0
 APT_SKIPPED=0
 APT_FAILED=0
@@ -94,9 +102,12 @@ if [[ -d "$APT_DIR" ]] && compgen -G "$APT_DIR/*.deb" > /dev/null 2>&1; then
     GLIBC_VER=$(ldd --version 2>/dev/null | head -1 | awk '{print $NF}')
     DEB_LIST=(); DEB_INCOMPAT=()
     for deb in "$APT_DIR"/*.deb; do
+        # Nota: '|| true' es obligatorio — los .deb sin libc6 en Depends
+        # (ca-certificates, fonts, tzdata...) hacen que grep salga 1 y con
+        # 'set -e + pipefail' eso mataba setup.sh en silencio.
         need=$(dpkg-deb -f "$deb" Depends 2>/dev/null \
                | grep -oE 'libc6 \(>= [0-9]+\.[0-9]+[0-9.]*\)' \
-               | sed -E 's/.*\(>= ([0-9.]+)\)/\1/' | sort -V | tail -1)
+               | sed -E 's/.*\(>= ([0-9.]+)\)/\1/' | sort -V | tail -1 || true)
         if [[ -n "$need" && -n "$GLIBC_VER" ]] && \
            ! dpkg --compare-versions "$need" le "$GLIBC_VER" 2>/dev/null; then
             DEB_INCOMPAT+=("$(basename "$deb")")
@@ -135,10 +146,10 @@ if [[ -d "$APT_DIR" ]] && compgen -G "$APT_DIR/*.deb" > /dev/null 2>&1; then
     # Configurar todo lo desplegado (los .deb pueden quedar "unpacked" hasta
     # que sus dependencias del mismo lote están presentes).
     info "Configurando paquetes desplegados..."
-    dpkg --configure -a 2>>"$LOG_FILE" || true
+    DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>>"$LOG_FILE" || true
     if [[ $APT_FAILED -gt 0 ]]; then
         info "Reparando dependencias rotas sin red..."
-        apt-get -f install -y --no-download 2>>"$LOG_FILE" || true
+        apt-get -f install -y --no-download -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" 2>>"$LOG_FILE" || true
     fi
 
     success "APT: $APT_INSTALLED instalados, $APT_SKIPPED ya tenía, $APT_FAILED fallos."
@@ -232,7 +243,7 @@ if [[ "$VENV_MODE" == "venv" ]]; then
 else
     # Sin pip en el sistema: arrancar pip desde el wheel del bundle (sin red).
     if ! "$PYTHON_BIN" -m pip --version &>/dev/null; then
-        PIP_WHL=$(ls "$WHEELS_DIR"/pip-*.whl 2>/dev/null | head -1)
+        PIP_WHL=$(ls "$WHEELS_DIR"/pip-*.whl 2>/dev/null | head -1 || true)
         if [[ -n "$PIP_WHL" ]]; then
             info "pip no instalado — usando pip del bundle offline."
             PIP_BOOT="PYTHONPATH=$PIP_WHL $PYTHON_BIN -m pip"

@@ -24,6 +24,7 @@ from rich.rule import Rule
 from .models import TargetInfo, Profile
 from .decision_engine import decide_path
 from .terminal import banner, print_targets_table, print_summary_table, spinner, console
+from .terminal import prompt_target_selection, parse_target_selection
 from .runner import run_single_target, extract_reusable_psk
 from .vendor_profiles import intel_for
 from .monitor import enable_monitor_mode, disable_monitor_mode
@@ -342,7 +343,7 @@ def candidates_command(
 def run_all(
     iface: str = typer.Option("wlan0", help="Interfaz WiFi (modo monitor) para Red Team"),
     wids_iface: Optional[str] = typer.Option(None, help="Segunda interfaz para WIDS (Blue Team). Opcional."),
-    scan_duration: int = typer.Option(60, help="Segundos de escaneo inicial de redes"),
+    scan_duration: int = typer.Option(25, help="Segundos de escaneo inicial de redes (estilo wifite: 20-30s)"),
     scope_file: str = typer.Option("config/scope.yml", help="Archivo de scope RoE"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Mostrar path sin ejecutar fases aéreas"),
     target_bssid: Optional[str] = typer.Option(None, help="Auditar solo este BSSID (omitir scan)"),
@@ -350,14 +351,18 @@ def run_all(
     allow_lan: bool = typer.Option(False, "--allow-lan", help="Permitir sondeo LAN del gateway (solo lectura, requiere lab_lan_gateway)"),
     resume_last: bool = typer.Option(False, "--resume-last", help="Continuar la última sesión (omite BSSIDs ya completados)"),
     resume_file: str = typer.Option("", help="Continuar una sesión concreta (data/sessions/sesion_<ts>.json)"),
+    select: bool = typer.Option(True, "--select/--no-select", help="Pausar tras el scan para marcar redes (estilo wifite). --no-select = todas automático."),
+    targets: str = typer.Option("", help="Selección no interactiva: '1,3-5,all' (para scripts/offline auto)"),
+    all_targets: bool = typer.Option(False, "--all", help="Auditar todas sin preguntar (atajo de --no-select)"),
 ):
     """
-    Automatización completa: escanea todas las redes y las audita una a una.
+    Automatización completa estilo wifite: escanea, deja marcar y audita en secuencia.
 
     Flujo secuencial automático:
-      1. Escanear redes en el aire
-      2. Por cada red: PROFILE → STRIDE → DECIDE → EXEC → REPORT
-      3. Resumen final de toda la sesión
+      1. Escanear redes en el aire (20-30s, el escáner se detiene solo)
+      2. Marcar redes objetivo (prompt interactivo o --targets/--all/--no-select)
+      3. Por cada red marcada: PROFILE → STRIDE → DECIDE → EXEC → REPORT
+      4. Resumen final de toda la sesión
     """
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     banner()
@@ -441,6 +446,28 @@ def run_all(
             console.print(f"  [dim]Scope: {dropped} red(es) fuera de lista blanca omitidas[/dim]")
 
         print_targets_table(raw_targets)
+
+        # ── PASO 2b: Selección estilo wifite (el escáner ya se detuvo) ───────
+        # Pase libre: el usuario marca qué redes auditar y el resto corre solo.
+        if target_bssid:
+            pass  # target fijo: sin selección
+        elif targets.strip():
+            picked = parse_target_selection(targets, len(raw_targets))
+            if not picked:
+                console.print(f"  [yellow][SELECT] '--targets {targets}' no matchea 1-{len(raw_targets)}. Abortando.[/yellow]")
+                return
+            console.print(f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas vía --targets: {picked}")
+            raw_targets = [raw_targets[i - 1] for i in picked]
+        elif all_targets or not select:
+            console.print(f"  [dim][SELECT] modo automático — {len(raw_targets)} redes (todas)[/dim]")
+        else:
+            picked = prompt_target_selection(len(raw_targets))
+            if not picked:
+                console.print("  [yellow][SELECT] sin objetivos marcados. Abortando sin tocar el aire.[/yellow]")
+                return
+            console.print(f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas: {picked}")
+            raw_targets = [raw_targets[i - 1] for i in picked]
+
         console.print(f"\n  [bold]{len(raw_targets)}[/bold] redes a auditar. Iniciando secuencia...\n")
         time.sleep(1)
 

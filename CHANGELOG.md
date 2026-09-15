@@ -5,6 +5,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
 ---
 
+## [No publicado]
+
+### Añadido
+- Flujo de selección de objetivos estilo wifite en `run-all`: escanea 25s
+  (default, antes 60s), detiene el escáner y deja marcar redes con prompt
+  interactivo (`1,3-5` · `all` · Enter=todas · `q`=abortar). Nuevas flags
+  `--select/--no-select`, `--targets "1,3-5,all"` y `--all` para uso
+  no-interactivo/offline automático. Helpers `parse_target_selection()` y
+  `prompt_target_selection()` en `terminal.py` + tests en
+  `tests/test_target_select.py`.
+
+### Corregido
+- `setup.sh` moría en silencio tras "118 paquetes .deb" por `set -e + pipefail`
+  + `grep` sin match en .deb sin dependencia libc6 (ca-certificates, fonts…):
+  añadido `|| true` al filtro de glibc (y al `ls` de pip wheel).
+- `setup.sh` se colgaba en `macchanger` por pregunta debconf interactiva:
+  preseed `automatically_change_mac=false` + `DEBIAN_FRONTEND=noninteractive`
+  en `dpkg --configure` / `apt-get -f install`.
+- `tests/test_field_ready.py::test_find_rockyou_override` hecho hermético
+  (falla en cualquier Kali con rockyou del sistema instalado).
+
 ## [2.1.0-wifite4] — 2026-09-14
 
 ### Propósito de esta entrega

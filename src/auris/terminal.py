@@ -61,6 +61,76 @@ def print_targets_table(targets: List[Dict[str, Any]]):
     console.print(table)
 
 
+def parse_target_selection(selection: str, total: int) -> List[int]:
+    """Parsea '1,3-5,all' → índices 1-based validados y dedupados. 'all'/'' = todos."""
+    s = (selection or "").strip().lower()
+    if s in ("", "all", "a", "todas", "todos"):
+        return list(range(1, total + 1))
+    if s in ("q", "quit", "exit", "none", "0", "n"):
+        return []
+    picked: List[int] = []
+    for part in s.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            try:
+                a_s, b_s = part.split("-", 1)
+                a, b = int(a_s.strip()), int(b_s.strip())
+            except ValueError:
+                continue
+            if a > b:
+                a, b = b, a
+            for n in range(a, b + 1):
+                if 1 <= n <= total and n not in picked:
+                    picked.append(n)
+        else:
+            try:
+                n = int(part)
+            except ValueError:
+                continue
+            if 1 <= n <= total and n not in picked:
+                picked.append(n)
+    return sorted(picked)
+
+
+def prompt_target_selection(total: int) -> List[int]:
+    """Pregunta interactiva estilo wifite: qué redes auditar tras el scan.
+
+    El escaneo ya se detuvo antes de llamar aquí (pase libre para marcar).
+    Retorna lista de índices 1-based. Vacío = abortar.
+    """
+    import sys
+    if total <= 0:
+        return []
+    if not sys.stdin.isatty():
+        # Sin TTY (pipe/cron): comportamiento automático = todas
+        console.print("  [dim][SELECT] sin TTY — seleccionando todas las redes[/dim]")
+        return list(range(1, total + 1))
+    console.print(
+        f"\n  [bold cyan]Marca objetivos[/bold cyan] [dim](ej: 1,3-5 · 'all' = todas · Enter = todas · 'q' = abortar)[/dim]"
+    )
+    try:
+        answer = console.input("  [bold]Selección > [/bold]").strip()
+    except (EOFError, KeyboardInterrupt):
+        console.print("\n  [yellow]Selección cancelada por el usuario.[/yellow]")
+        return []
+    if answer == "":
+        return list(range(1, total + 1))
+    picked = parse_target_selection(answer, total)
+    # Entrada inválida (ej: 'xyz', '99') → no abortar, reintentar una vez
+    if not picked and answer.lower() not in ("q", "quit", "exit", "none", "0", "n"):
+        console.print(f"  [yellow]Selección '{answer}' inválida para 1-{total}. Intenta de nuevo.[/yellow]")
+        try:
+            answer2 = console.input("  [bold]Selección > [/bold]").strip()
+        except (EOFError, KeyboardInterrupt):
+            return []
+        if answer2 == "":
+            return list(range(1, total + 1))
+        picked = parse_target_selection(answer2, total)
+    return picked
+
+
 def print_phase_start(phase: str, target_bssid: str, target_ssid: str):
     console.print(Rule(f"[bold yellow]{phase}[/bold yellow]  [dim]{target_ssid} ({target_bssid})[/dim]", style="yellow"))
 
