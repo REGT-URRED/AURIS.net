@@ -13,6 +13,17 @@ COMANDO ÚNICO (copiar y pegar en Kali, una sola línea):
   Después SOLO edita config/scope.yml (BSSIDs reales + time_window) y ejecuta:
   sudo auris run-all --dry-run && sudo auris run-all --force-roe
 
+FLUJO DE AUDITORÍA (estilo wifite):
+  run-all escanea el aire 25s (default, ajustable con --scan-duration 30),
+  DETIENE el escáner y te deja MARCAR las redes a auditar:
+    Selección > 1,3-5     (audita las marcadas y el resto corre solo en secuencia)
+    Selección > all       (o Enter: audita todas)
+    Selección > q         (aborta sin tocar el aire)
+  No-interactivo / scripts offline (sin prompt):
+    sudo auris run-all --force-roe --targets "1,3-5"
+    sudo auris run-all --force-roe --all        (todas, sin preguntar)
+    sudo auris run-all --dry-run --targets "1-2" (simula solo las marcadas)
+
 DÓNDE ESTÁ EL PAQUETE EN EL USB (Ventoy):
   El .tar.gz y este txt están en la carpeta AURIS de la partición del USB.
   En Kali aparece como: /media/<usuario>/Ventoy/AURIS/
@@ -35,13 +46,18 @@ OPCIÓN B — Instalación en campo (offline):
   4. python3 auris.py db-init          (crea la BD; sin esto doctor marca WARN)
   5. sudo auris doctor                 (sin ERROR salvo radio/hashcat)
   6. sudo auris hal                    (auditoría de chipsets WiFi y USB detectados)
-  7. sudo auris run-all --dry-run      (ver paths sin tocar el aire)
-  8. sudo auris run-all --force-roe    (auditoría real; requiere scope firmado)
+  7. sudo auris run-all --dry-run      (ver paths sin tocar el aire;
+     tras el scan marca redes: 1,3-5 · all · q)
+  8. sudo auris run-all --force-roe    (auditoría real; requiere scope firmado;
+     marca redes o usa --all / --targets "1,2" para modo automático)
      Solo-LAN extra: sudo auris run-all --force-roe --allow-lan
   Nota: los pasos 2, 5, 6, 7 y 8 van con sudo; para la parte aérea real hace falta
   un adaptador WiFi con modo monitor conectado antes del paso 7.
 
 COMANDOS ÚTILES (AURIS + Wifite4):
+  sudo auris run-all --force-roe --targets "1,3"  auditar solo las marcadas (auto)
+  sudo auris run-all --force-roe --all            auditar todas sin preguntar
+  sudo auris run-all --scan-duration 30           escaneo inicial de 30s (default 25)
   sudo auris hal                               inventario de hardware HAL (12 chipsets WiFi)
   python3 auris.py candidates "SSID"           generador heurístico de candidatos (Wifite4)
   sudo auris run-all --dry-run --resume-last   continuar sesión interrumpida
