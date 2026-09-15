@@ -8,15 +8,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 ## [No publicado]
 
 ### Añadido
-- Flujo wifite puro sin BSSIDs previos: `allowed_bssids` vacío = modo
+- Flujo wifite puro sin BSSIDs previos: `allowed_bssids: []` = modo
   selección; la marca explícita tras el scan (prompt tecleado / `--targets` /
   `--target-bssid`) ES la firma RoE (`selection_consent`). `sudo auris run-all`
   escanea 25s, marcas `1,3-5` y audita en secuencia sin nada más. Solo el modo
   totalmente automático (`--all`/`--no-select`/sin TTY) sigue exigiendo
   `--force-roe`. Scopes por defecto con lista vacía; `doctor`/`setup.sh`
   re-mensajados; `LEEME-USB.txt` reescrito sin pre-edición de BSSIDs.
-
-### Añadido
 - Flujo de selección de objetivos estilo wifite en `run-all`: escanea 25s
   (default, antes 60s), detiene el escáner y deja marcar redes con prompt
   interactivo (`1,3-5` · `all` · Enter=todas · `q`=abortar). Nuevas flags
@@ -34,8 +32,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
   en `dpkg --configure` / `apt-get -f install`.
 - `setup.sh`: guard `|| true` en pipelines con `head` (`GLIBC_VER`, pip wheel)
   que bajo `set -e + pipefail` podían matar el instalador con SIGPIPE.
-- `tests/test_field_ready.py::test_find_rockyou_override` hecho hermético
-  (falla en cualquier Kali con rockyou del sistema instalado).
+- `monitor.py`: airmon-ng con `rc=1` pero con `wlan0mon` creado ya no aborta:
+  adopta el renombre (`find_monitor_iface`); orden manual `ip+iw` primero
+  (compatible hcxdumptool), airmon fallback; NM con restart verificado +
+  diagnóstico; `cli.py` aborta con guía si hay hardware pero sin monitor,
+  y restaura NM incluso si `enable` falló a medias.
+- `runner.py`: sintaxis hcxdumptool 6.3.1 válida (`-w`/`-c <ch><banda>`/
+  `--rcascan=p`/`--tot`/`--bpf` por objetivo vía `tcpdump -ddd`; fin de flags
+  inexistentes `--filterlist_ap`/`--filtermode`/`-o`/`--rcascan=<seg>` que
+  hacían fallar todo CAPTURE; filtrado posterior `hcxhashtool --mac-ap` y
+  `evidence/*_stderr.log` para no oscurecer errores.
+- `tests`: `test_session` con cwd portátil (no Windows-path), WPS/resilience
+  con `run_dir`, `test_target_select` con `explicit` vs auto (RoE),
+  `test_find_rockyou_override` hermético (rockyou del sistema).
 
 ## [2.1.0-wifite4] — 2026-09-14
 

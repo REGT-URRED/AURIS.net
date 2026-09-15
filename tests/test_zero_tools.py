@@ -39,8 +39,8 @@ def test_psk_phases_degrade_without_hash_or_hashcat(no_tools, tgt, tmp_path):
     assert no_tools._phase_psk_rockyou(tgt, str(tmp_path))[0] == "skipped"
 
 
-def test_resilience_degrades(no_tools, tgt):
-    assert no_tools._phase_resilience_test(tgt, "wlan0") == "skipped"
+def test_resilience_degrades(no_tools, tgt, tmp_path):
+    assert no_tools._phase_resilience_test(tgt, "wlan0", str(tmp_path)) == "skipped"
 
 
 def test_full_run_without_tools(no_tools, tgt, tmp_path, monkeypatch):

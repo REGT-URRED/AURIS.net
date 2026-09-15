@@ -120,3 +120,14 @@ SI ALGO FALLA:
   - RoE BLOQUEO firma (auditoría total sin --force-roe) -> marca objetivos
     explícitos en el prompt (ej: 1,3) o usa --targets "1,3" o --force-roe:
     sudo auris run-all --force-roe --all
+  - airmon-ng dice "rc=1" pero creó wlan0mon -> normal en ath9k/Kali 2024;
+    AURIS lo adopta solo; si ves "No se pudo activar modo monitor" con
+    hardware presente: sudo airmon-ng stop wlan0mon; sudo systemctl restart
+    NetworkManager; sudo rfkill unblock wifi; reintenta.
+  - CAPTURE falló siempre en v6.3.1 vieja -> era sintaxis inválida de
+    hcxdumptool ya corregida (--bpf/-w/-c 6a/--rcascan=p/--tot); si aún ves
+    "error" en captura, revisa el archivo evidence/<id>/*_stderr.log
+  - Reports vacíos (0 B) o evidencia sin .pcap -> falla de captura, no
+    bloqueo de suite; el informe seguirá honesto (exhausted/error)
+  - Scope con institución de ejemplo -> solo WARN de doctor, no bloquea;
+    la autorización la da el marcado

@@ -56,7 +56,7 @@ def test_corrupt_scope_clean_exit(tmp_path):
     r = subprocess.run(
         [sys.executable, "auris.py", "run-all", "--scope-file", str(bad), "--dry-run"],
         capture_output=True, text=True, timeout=60,
-        cwd="/mnt/d/PROCESO/TESTWIFI")
+        cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     assert r.returncode == 1
     assert "Traceback" not in (r.stdout + r.stderr)
     assert "corrupto" in (r.stdout + r.stderr).lower()
