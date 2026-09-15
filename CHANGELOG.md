@@ -23,6 +23,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 - `setup.sh` se colgaba en `macchanger` por pregunta debconf interactiva:
   preseed `automatically_change_mac=false` + `DEBIAN_FRONTEND=noninteractive`
   en `dpkg --configure` / `apt-get -f install`.
+- `setup.sh`: guard `|| true` en pipelines con `head` (`GLIBC_VER`, pip wheel)
+  que bajo `set -e + pipefail` podían matar el instalador con SIGPIPE.
 - `tests/test_field_ready.py::test_find_rockyou_override` hecho hermético
   (falla en cualquier Kali con rockyou del sistema instalado).
 

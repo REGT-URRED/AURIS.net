@@ -99,7 +99,7 @@ if [[ -d "$APT_DIR" ]] && compgen -G "$APT_DIR/*.deb" > /dev/null 2>&1; then
 
     # Filtrar por compatibilidad de glibc ANTES de tocar dpkg: instalar un .deb
     # que pide libc6 más nuevo deja el paquete a medias y traba dpkg.
-    GLIBC_VER=$(ldd --version 2>/dev/null | head -1 | awk '{print $NF}')
+    GLIBC_VER=$(ldd --version 2>/dev/null | head -1 | awk '{print $NF}' || true)
     DEB_LIST=(); DEB_INCOMPAT=()
     for deb in "$APT_DIR"/*.deb; do
         # Nota: '|| true' es obligatorio — los .deb sin libc6 en Depends
