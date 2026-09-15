@@ -5,13 +5,15 @@ student: "[nombre]"
 lab_owned: true
 authorization: "roe-firmado.pdf"
 
-# Lista blanca de BSSID autorizados (añadir aquí los del laboratorio)
-allowed_bssids:
-  - "aa:bb:cc:dd:ee:ff"
+# Lista blanca de BSSID autorizados (OPCIONAL — modo wifite por defecto).
+# Vacío = escaneas, MARCAS las redes tras el scan y esa marca ES la autorización.
+# Solo rellena esto si quieres restringir de antemano a equipos fijos:
+# allowed_bssids:
+#   - "AA:BB:CC:DD:EE:FF"
+allowed_bssids: []
 
-allowed_ssids:
-  - "LAB-AURIS"
-  - "LAB-AURIS_2"
+# SSIDs permitidos (solo aplican si fijas allowed_bssids arriba).
+allowed_ssids: []
 
 # Ventana de tiempo de autorización (ISO 8601)
 time_window: "2026-09-12/2026-12-15"

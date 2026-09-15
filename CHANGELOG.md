@@ -8,6 +8,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 ## [No publicado]
 
 ### Añadido
+- Flujo wifite puro sin BSSIDs previos: `allowed_bssids` vacío = modo
+  selección; la marca explícita tras el scan (prompt tecleado / `--targets` /
+  `--target-bssid`) ES la firma RoE (`selection_consent`). `sudo auris run-all`
+  escanea 25s, marcas `1,3-5` y audita en secuencia sin nada más. Solo el modo
+  totalmente automático (`--all`/`--no-select`/sin TTY) sigue exigiendo
+  `--force-roe`. Scopes por defecto con lista vacía; `doctor`/`setup.sh`
+  re-mensajados; `LEEME-USB.txt` reescrito sin pre-edición de BSSIDs.
+
+### Añadido
 - Flujo de selección de objetivos estilo wifite en `run-all`: escanea 25s
   (default, antes 60s), detiene el escáner y deja marcar redes con prompt
   interactivo (`1,3-5` · `all` · Enter=todas · `q`=abortar). Nuevas flags

@@ -63,7 +63,9 @@ def _load_scope(scope_path: str) -> dict:
 
 def _apply_scope_filter(raw_targets: list, scope: dict) -> tuple:
     """Filtra por listas blancas BSSID+SSID. Retorna (targets, dropped, lab_mode).
-    Lanza typer.Exit(1) si con scope real no queda nada auditable."""
+    Sin lista blanca (vacía o placeholder) = modo wifite: pasa todo y la
+    autorización la da el marcado posterior. Lanza typer.Exit(1) si con scope
+    real no queda nada auditable."""
     allowed_bssids = scope.get("allowed_bssids", []) or []
     allowed_ssids = scope.get("allowed_ssids", []) or []
     lab_mode = not allowed_bssids or allowed_bssids == ["aa:bb:cc:dd:ee:ff"]
@@ -376,10 +378,12 @@ def run_all(
 
     scope = _load_scope(scope_path)
 
-    # ── Puerta RoE: sin scope válido no se toca el aire ──────────────────────
+    # ── Puerta RoE fase A: la ventana temporal se exige SIEMPRE, antes del
+    # scan. La firma (dry_run/--force-roe/selección) se resuelve en fase B,
+    # tras marcar objetivos — flujo wifite: no hay que saber BSSIDs antes.
     from .roe import enforce_scope, verify_mac_stable, RoEError
     try:
-        roe_ctx = enforce_scope(scope, dry_run=dry_run, force_roe=force_roe)
+        roe_ctx = enforce_scope(scope, dry_run=True, force_roe=force_roe)
     except RoEError as e:
         console.print(f"[red][RoE BLOQUEO][/red] {e}")
         raise typer.Exit(2)
@@ -441,7 +445,7 @@ def run_all(
         # Filtrar por scope (BSSID y SSID; modo lab solo avisa)
         raw_targets, dropped, lab_mode = _apply_scope_filter(raw_targets, scope)
         if lab_mode:
-            console.print("[yellow][WARN][/yellow] scope.yml en modo lab — auditando todas las redes.")
+            console.print("[yellow][SELECT][/yellow] modo wifite — sin lista blanca previa: TÚ autorizas marcando tras el scan.")
         elif dropped:
             console.print(f"  [dim]Scope: {dropped} red(es) fuera de lista blanca omitidas[/dim]")
 
@@ -449,8 +453,11 @@ def run_all(
 
         # ── PASO 2b: Selección estilo wifite (el escáner ya se detuvo) ───────
         # Pase libre: el usuario marca qué redes auditar y el resto corre solo.
+        # Esa marca explícita ES la firma RoE (no hacen falta BSSIDs previos).
+        consent_explicit = False
         if target_bssid:
             pass  # target fijo: sin selección
+            consent_explicit = True  # BSSID nombrado explícitamente = firma
         elif targets.strip():
             picked = parse_target_selection(targets, len(raw_targets))
             if not picked:
@@ -458,15 +465,36 @@ def run_all(
                 return
             console.print(f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas vía --targets: {picked}")
             raw_targets = [raw_targets[i - 1] for i in picked]
+            consent_explicit = True
         elif all_targets or not select:
             console.print(f"  [dim][SELECT] modo automático — {len(raw_targets)} redes (todas)[/dim]")
         else:
-            picked = prompt_target_selection(len(raw_targets))
+            picked, consent_explicit = prompt_target_selection(len(raw_targets))
             if not picked:
                 console.print("  [yellow][SELECT] sin objetivos marcados. Abortando sin tocar el aire.[/yellow]")
                 return
             console.print(f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas: {picked}")
             raw_targets = [raw_targets[i - 1] for i in picked]
+
+        # ── Puerta RoE fase B: firma de sesión ──────────────────────────────
+        # Vale cualquiera: --dry-run, --force-roe, o selección explícita
+        # (prompt tecleado / --targets / --target-bssid). El modo automático
+        # total (--all/--no-select/sin TTY) sin flag sigue bloqueado.
+        if not dry_run and not force_roe:
+            if consent_explicit:
+                try:
+                    roe_ctx = enforce_scope(scope, dry_run=False,
+                                            force_roe=False,
+                                            selection_consent=True)
+                except RoEError as e:
+                    console.print(f"[red][RoE BLOQUEO][/red] {e}")
+                    raise typer.Exit(2)
+                session_mac = roe_ctx.get("iface_mac")
+                console.print(f"  [green][RoE][/green] [dim]firma de sesión: {len(raw_targets)} objetivo(s) marcado(s) explícitamente[/dim]")
+            else:
+                console.print("[red][RoE BLOQUEO][/red] RoE: auditoría automática total sin firma — "
+                              "marca objetivos explícitos (prompt/--targets/--target-bssid) o usa --force-roe")
+                raise typer.Exit(2)
 
         console.print(f"\n  [bold]{len(raw_targets)}[/bold] redes a auditar. Iniciando secuencia...\n")
         time.sleep(1)

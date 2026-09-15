@@ -52,11 +52,19 @@ def read_iface_mac(iface: str) -> Optional[str]:
         return None
 
 
-def enforce_scope(scope: Dict, dry_run: bool, force_roe: bool = False) -> Dict[str, Optional[str]]:
+def enforce_scope(scope: Dict, dry_run: bool, force_roe: bool = False,
+                  selection_consent: bool = False) -> Dict[str, Optional[str]]:
     """
     Puerta obligatoria antes de tocar el aire. Retorna contexto verificado
-    {"iface_mac": ..., "window": ..., "window_bypassed": bool}.
+    {"iface_mac": ..., "window": ..., "window_bypassed": bool,
+     "selection_mode": bool}.
     Lanza RoEError si la sesión no puede continuar.
+
+    Modelo wifite: NO se exige conocer los BSSIDs por adelantado. Si
+    allowed_bssids está vacío (o con el placeholder de ejemplo), el scope
+    opera en modo selección: el usuario marca los objetivos tras el escaneo
+    y ESA selección explícita es la autorización de la sesión
+    (selection_consent=True). La ventana temporal se exige siempre.
     """
     ok, msg = check_time_window(scope)
     bypassed = False
@@ -69,14 +77,20 @@ def enforce_scope(scope: Dict, dry_run: bool, force_roe: bool = False) -> Dict[s
         else:
             raise RoEError(f"RoE: {msg}")
 
-    if scope.get("dry_run_default", False) and not dry_run and not force_roe:
-        raise RoEError("RoE: scope exige dry_run_default — usa --dry-run o --force-roe explícito")
+    if scope.get("dry_run_default", False) and not dry_run \
+            and not force_roe and not selection_consent:
+        raise RoEError("RoE: scope exige dry_run_default — usa --dry-run, "
+                       "--force-roe, o marca objetivos explícitos en el prompt/--targets")
 
-    if not scope.get("allowed_bssids"):
-        raise RoEError("RoE: scope sin allowed_bssids (lista blanca vacía)")
+    allowed = scope.get("allowed_bssids", []) or []
+    selection_mode = (not allowed) or (allowed == ["aa:bb:cc:dd:ee:ff"])
+    # Sin lista blanca no se bloquea: la selección explícita tras el scan
+    # es la autorización (flujo wifite). Con lista real, el filtro sigue
+    # intersectando en cli._apply_scope_filter.
 
     iface = scope.get("iface_red_team", "wlan0")
-    return {"iface_mac": read_iface_mac(iface), "window": msg, "window_bypassed": bypassed}
+    return {"iface_mac": read_iface_mac(iface), "window": msg,
+            "window_bypassed": bypassed, "selection_mode": selection_mode}
 
 
 def verify_mac_stable(iface: str, mac_start: Optional[str]) -> Tuple[bool, str]:

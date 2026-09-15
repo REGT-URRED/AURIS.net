@@ -128,7 +128,8 @@ def check_scope(project_dir: str) -> CheckResult:
             content = f.read()
         if "[universidad]" in content or "[docente]" in content:
             return CheckResult("scope.yml", "warn",
-                "scope.yml existe pero aún tiene valores de ejemplo — edítalo antes de auditar")
+                "scope.yml con institución de ejemplo — personalízalo (opcional); "
+                "la autorización la da el marcado de redes tras el scan")
         return CheckResult("scope.yml", "ok", scope_path)
     elif os.path.isfile(example_path):
         return CheckResult("scope.yml", "warn",

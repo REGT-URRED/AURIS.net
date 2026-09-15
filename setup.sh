@@ -469,9 +469,9 @@ EOF
     warn "IMPORTANTE: Editar $SCOPE_FILE con los BSSID autorizados antes de auditar."
 else
     success "scope.yml ya existe — no se sobreescribe."
-    # Validar que el scope heredado no venga con placeholders ni ventana vencida
-    if grep -qE "\[universidad\]|\[docente\]|\[nombre\]|aa:bb:cc:dd:ee:ff" "$SCOPE_FILE" 2>/dev/null; then
-        warn "scope.yml aún tiene valores de ejemplo (institución/BSSIDs). Edítalo antes de auditar."
+    # Validar que el scope heredado no venga con ventana vencida
+    if grep -qE "\[universidad\]|\[docente\]|\[nombre\]" "$SCOPE_FILE" 2>/dev/null; then
+        warn "scope.yml aún tiene institución de ejemplo. Opcional: personalízalo; la autorización la da el marcado tras el scan."
     fi
     TW_END=$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$SCOPE_FILE" 2>/dev/null | tail -1 || true)
     if [[ -z "$TW_END" ]]; then

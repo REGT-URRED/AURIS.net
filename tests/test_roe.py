@@ -76,13 +76,31 @@ def test_scope_filter_bssid_and_ssid():
     # modo lab: todo pasa
     f3, d3, lab3 = _apply_scope_filter(targets, {"allowed_bssids": ["aa:bb:cc:dd:ee:ff"]})
     assert len(f3) == 2 and lab3 is True
+    # modo wifite (lista vacía): todo pasa, el marcado autoriza
+    f4, d4, lab4 = _apply_scope_filter(targets, {"allowed_bssids": []})
+    assert len(f4) == 2 and lab4 is True
 
 
-def test_enforce_requires_allowlist_and_window():
-    with pytest.raises(RoEError):
-        enforce_scope(_scope(allowed_bssids=[]), dry_run=True)
+def test_enforce_selection_mode_needs_no_allowlist():
+    # Modelo wifite: sin lista blanca no se bloquea; el marcado autoriza.
+    ctx = enforce_scope(_scope(allowed_bssids=[]), dry_run=True)
+    assert ctx["selection_mode"] is True
+    ctx2 = enforce_scope(_scope(), dry_run=True)
+    assert ctx2["selection_mode"] is False
+    # La ventana se exige siempre
     with pytest.raises(RoEError):
         enforce_scope(_scope(time_window="2020-01-01/2020-12-31"), dry_run=True)
+
+
+def test_enforce_selection_consent_signs_session():
+    # run-all real sin --force-roe, pero con marcado explícito = firma válida
+    ctx = enforce_scope(_scope(), dry_run=False, force_roe=False,
+                        selection_consent=True)
+    assert ctx["window"].startswith("ventana OK")
+    # Sin firma y sin marcado explícito sigue bloqueado
+    with pytest.raises(RoEError):
+        enforce_scope(_scope(), dry_run=False, force_roe=False,
+                      selection_consent=False)
 
 
 def test_mac_stable_loopback():

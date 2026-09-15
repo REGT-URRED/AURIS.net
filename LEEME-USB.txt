@@ -10,18 +10,23 @@ COMANDO ÚNICO (copiar y pegar en Kali, una sola línea):
   cd /media/$USER/Ventoy/AURIS && mkdir -p ~/auris && tar xzf auris-kali.tar.gz -C ~/auris && cd ~/auris && sudo bash setup.sh
   (setup.sh instala los 118 .deb + wheels, crea el comando 'auris', genera
   scope.yml con tu interfaz auto-detectada e inicializa la BD. No pide nada.)
-  Después SOLO edita config/scope.yml (BSSIDs reales + time_window) y ejecuta:
-  sudo auris run-all --dry-run && sudo auris run-all --force-roe
+  Después NO hay que saber ningún BSSID: solo ejecuta y marca tras el scan:
+  sudo auris run-all --dry-run     (simula: escanea, marcas, ves paths)
+  sudo auris run-all               (real estilo wifite: escanea 25s, MARCAS
+                                    1,3-5 y el resto corre solo en secuencia)
 
-FLUJO DE AUDITORÍA (estilo wifite):
+FLUJO DE AUDITORÍA (estilo wifite — sin saber BSSIDs antes):
   run-all escanea el aire 25s (default, ajustable con --scan-duration 30),
   DETIENE el escáner y te deja MARCAR las redes a auditar:
     Selección > 1,3-5     (audita las marcadas y el resto corre solo en secuencia)
-    Selección > all       (o Enter: audita todas)
+    Selección > all       (o Enter: audita todas — pide --force-roe)
     Selección > q         (aborta sin tocar el aire)
+  Esa marca explícita ES la autorización RoE: no hay que pre-editar BSSIDs.
+  config/scope.yml solo se toca para institución/ventana (opcional) o para
+  fijar allowed_bssids si quieres restringir de antemano a equipos fijos.
   No-interactivo / scripts offline (sin prompt):
-    sudo auris run-all --force-roe --targets "1,3-5"
-    sudo auris run-all --force-roe --all        (todas, sin preguntar)
+    sudo auris run-all --targets "1,3-5"   (la marca por flag también firma)
+    sudo auris run-all --force-roe --all   (todas, sin preguntar)
     sudo auris run-all --dry-run --targets "1-2" (simula solo las marcadas)
 
 DÓNDE ESTÁ EL PAQUETE EN EL USB (Ventoy):
@@ -40,16 +45,19 @@ OPCIÓN B — Instalación en campo (offline):
   1. cd /media/$USER/Ventoy/AURIS
      mkdir -p ~/auris && tar xzf auris-*.tar.gz -C ~/auris && cd ~/auris
   2. sudo bash setup.sh                (instala todo .deb + wheels + comando 'auris')
-  3. Edita config/scope.yml: BSSIDs reales, institución, ventana time_window
+  3. (Opcional) Edita config/scope.yml: institución y ventana time_window.
+     Los BSSIDs NO hace falta editarlos: marcas las redes tras el scan.
+     Solo fija allowed_bssids si quieres restringir a equipos fijos, y
+     lab_lan_gateway (+ --allow-lan) para auditoría LAN.
      Opcional: cp data/vendor_map.example.json data/vendor_map.json y fija
-     los OUI de tus routers; define lab_lan_gateway para auditoría LAN.
+     los OUI de tus routers.
   4. python3 auris.py db-init          (crea la BD; sin esto doctor marca WARN)
   5. sudo auris doctor                 (sin ERROR salvo radio/hashcat)
   6. sudo auris hal                    (auditoría de chipsets WiFi y USB detectados)
-  7. sudo auris run-all --dry-run      (ver paths sin tocar el aire;
-     tras el scan marca redes: 1,3-5 · all · q)
-  8. sudo auris run-all --force-roe    (auditoría real; requiere scope firmado;
-     marca redes o usa --all / --targets "1,2" para modo automático)
+  7. sudo auris run-all --dry-run      (escanea, marcas 1,3-5, ves paths sin tocar el aire)
+  8. sudo auris run-all                (real wifite: escanea, MARCAS y audita en secuencia;
+     la marca explícita es la firma RoE, no pide nada más)
+     Totalmente automático: sudo auris run-all --force-roe --all
      Solo-LAN extra: sudo auris run-all --force-roe --allow-lan
   Nota: los pasos 2, 5, 6, 7 y 8 van con sudo; para la parte aérea real hace falta
   un adaptador WiFi con modo monitor conectado antes del paso 7.
@@ -109,5 +117,6 @@ SI ALGO FALLA:
   - doctor marca hashcat ERROR -> no es bloqueante: el crackeo PSK usa aircrack-ng
     (incluido en el bundle). hashcat solo aporta velocidad con GPU.
   - RoE BLOQUEO ventana      -> ajusta time_window en scope.yml a la fecha real.
-  - RoE BLOQUEO dry_run      -> añade --force-roe al run-all (firma la autorización):
-    sudo auris run-all --force-roe
+  - RoE BLOQUEO firma (auditoría total sin --force-roe) -> marca objetivos
+    explícitos en el prompt (ej: 1,3) o usa --targets "1,3" o --force-roe:
+    sudo auris run-all --force-roe --all

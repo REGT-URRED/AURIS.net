@@ -94,19 +94,21 @@ def parse_target_selection(selection: str, total: int) -> List[int]:
     return sorted(picked)
 
 
-def prompt_target_selection(total: int) -> List[int]:
+def prompt_target_selection(total: int) -> tuple:
     """Pregunta interactiva estilo wifite: qué redes auditar tras el scan.
 
     El escaneo ya se detuvo antes de llamar aquí (pase libre para marcar).
-    Retorna lista de índices 1-based. Vacío = abortar.
+    Retorna (índices 1-based, consentimiento_explícito). Vacío = abortar.
+    Consentimiento explícito = el usuario TECLEÓ su elección (incluye 'all'
+    escrito); Enter vacío o auto sin TTY no cuentan como explícito.
     """
     import sys
     if total <= 0:
-        return []
+        return [], False
     if not sys.stdin.isatty():
-        # Sin TTY (pipe/cron): comportamiento automático = todas
+        # Sin TTY (pipe/cron): comportamiento automático = todas, sin firma
         console.print("  [dim][SELECT] sin TTY — seleccionando todas las redes[/dim]")
-        return list(range(1, total + 1))
+        return list(range(1, total + 1)), False
     console.print(
         f"\n  [bold cyan]Marca objetivos[/bold cyan] [dim](ej: 1,3-5 · 'all' = todas · Enter = todas · 'q' = abortar)[/dim]"
     )
@@ -114,9 +116,9 @@ def prompt_target_selection(total: int) -> List[int]:
         answer = console.input("  [bold]Selección > [/bold]").strip()
     except (EOFError, KeyboardInterrupt):
         console.print("\n  [yellow]Selección cancelada por el usuario.[/yellow]")
-        return []
+        return [], False
     if answer == "":
-        return list(range(1, total + 1))
+        return list(range(1, total + 1)), False
     picked = parse_target_selection(answer, total)
     # Entrada inválida (ej: 'xyz', '99') → no abortar, reintentar una vez
     if not picked and answer.lower() not in ("q", "quit", "exit", "none", "0", "n"):
@@ -124,11 +126,12 @@ def prompt_target_selection(total: int) -> List[int]:
         try:
             answer2 = console.input("  [bold]Selección > [/bold]").strip()
         except (EOFError, KeyboardInterrupt):
-            return []
+            return [], False
         if answer2 == "":
-            return list(range(1, total + 1))
+            return list(range(1, total + 1)), False
         picked = parse_target_selection(answer2, total)
-    return picked
+    explicit = bool(picked)
+    return picked, explicit
 
 
 def print_phase_start(phase: str, target_bssid: str, target_ssid: str):
