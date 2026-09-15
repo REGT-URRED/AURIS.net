@@ -22,6 +22,7 @@ MITRE_ATTACK = {
     "CAPTURE_PMKID":          {"id": "T1040",     "name": "Network Sniffing (PMKID)",                  "tactic": "Credential Access"},
     "WPS_CLASS":              {"id": "T1110.001", "name": "Brute Force: Password Guessing (WPS PIN)",  "tactic": "Credential Access"},
     "WPS_PIXIE":              {"id": "T1110.002", "name": "Brute Force: Password Cracking (Pixie Dust)","tactic": "Credential Access"},
+    "PSK_DEFAULTS":           {"id": "T1110.002", "name": "Brute Force: Password Cracking (Top-20 defaults)", "tactic": "Credential Access"},
     "PSK_SSID_LOGIC":         {"id": "T1110.002", "name": "Brute Force: Password Cracking (Logic WL)", "tactic": "Credential Access"},
     "PSK_ROCKYOU":            {"id": "T1110.002", "name": "Brute Force: Password Cracking (Dictionary)","tactic": "Credential Access"},
     "CLASSIFY_WEAK_CRYPTO":   {"id": "T1600",     "name": "Weaken Encryption (WEP/Open)",              "tactic": "Defense Evasion"},

@@ -62,9 +62,9 @@ def decide_path(target: TargetInfo, profile: Profile, wids_enabled: bool = False
         path.append("DETECT_WPS_LOCKOUT")
         # If locked, brute force is not viable, skip to EOL
     elif target.wps_enabled and profile.pin_class != "unknown":
-        path.extend(["CAPTURE_HANDSHAKE", "WPS_CLASS", "VALIDATE_COUNTERMEASURE"])
+        path.extend(["CAPTURE_HANDSHAKE", "PSK_DEFAULTS", "WPS_CLASS", "VALIDATE_COUNTERMEASURE"])
     elif target.wps_enabled and target.wps_version == "1.0":
-        path.extend(["CAPTURE_HANDSHAKE", "WPS_PIXIE", "VALIDATE_COUNTERMEASURE"])
+        path.extend(["CAPTURE_HANDSHAKE", "PSK_DEFAULTS", "WPS_PIXIE", "VALIDATE_COUNTERMEASURE"])
     elif not target.wps_enabled:
         if target.wpa3_supported:
             path.append("DETECT_WPA3_SAE")
@@ -72,7 +72,7 @@ def decide_path(target: TargetInfo, profile: Profile, wids_enabled: bool = False
             # We skip PSK_ROCKYOU to avoid wasting compute time
         else:
             # Fallback to SSID derivation or pure dictionary if RSN IE shows PMKID support
-            path.extend(["CAPTURE_PMKID", "PSK_SSID_LOGIC", "PSK_ROCKYOU"])
+            path.extend(["CAPTURE_PMKID", "PSK_DEFAULTS", "PSK_SSID_LOGIC", "PSK_ROCKYOU"])
             
     if target.dpp_supported:
         path.append("AUDIT_DPP_VULNERABILITIES")

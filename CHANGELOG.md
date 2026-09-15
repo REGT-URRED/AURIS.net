@@ -18,6 +18,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 - Flujo de selección de objetivos estilo wifite en `run-all`: escanea 25s
   (default, antes 60s), detiene el escáner y deja marcar redes con prompt
   interactivo (`1,3-5` · `all` · Enter=todas · `q`=abortar). Nuevas flags
+- Fase `PSK_DEFAULTS` Top-20 sigilosa: 20 claves por error humano (12345678,
+  password…), probadas en 2×10 tras cada CAPTURE con pausa+jitter 2-5s y sin
+  barra ruidosa; si acierta, omite WPS/SSID/rockyou automáticamente (omisión de
+  trabajo del 50% en parques con defaults). Trazable en `evidence/defaults_*.txt`.
+  Tiempo <60s agregado; no se ejecuta en ruta WPA3-SAE. Incluida en MITRE y tests.
   `--select/--no-select`, `--targets "1,3-5,all"` y `--all` para uso
   no-interactivo/offline automático. Helpers `parse_target_selection()` y
   `prompt_target_selection()` en `terminal.py` + tests en

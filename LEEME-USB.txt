@@ -72,6 +72,10 @@ COMANDOS ÚTILES (AURIS + Wifite4):
   python3 auris.py verify-rockyou              validar wordlist del bundle
   ls data/sessions/                            sesiones guardadas
 
+  - Top-20 defaults sigiloso -> si la clave es una de 20 humanas
+    comunes (12345678, password…), se omite todo el trabajo pesado (WPS +
+    SSID/rockyou) y redobla el throughput.
+
 MATRIZ DE CAPACIDAD (Kali mínima, sin herramientas de radio):
   NUEVA ARQUITECTURA WIFITE4 (v2.1.0):
     - HAL Userland: soporte y auto-detección para 12 chipsets (Atheros AR9271,
@@ -79,6 +83,8 @@ MATRIZ DE CAPACIDAD (Kali mínima, sin herramientas de radio):
       Ralink RT3070/RT5370, Intel iwlwifi).
     - Pipeline Modular: desacoplamiento en fases independientes (Capture, WPS
       Pixie/PIN/PBC, PSK Cracker, RoE Governance, LAN Audit).
+    - Top-20 Sigiloso: 20 claves humanas más comunes (por error humano), 2×10
+      con pausa+jitter y sin barra ruidosa; si acierta, omite WPS/diccionarios.
     - Generador Heurístico: mutación por familias de SSID, tokens ISP, números
       y fragmentos de BSSID específicos para routers domésticos.
     - Sensor WIDS: detector de ventanas activas WPS Push-Button (PBC) y alertas.

