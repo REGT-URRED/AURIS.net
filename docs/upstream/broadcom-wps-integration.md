@@ -1,3 +1,7 @@
+> **Estado:** publicado como <https://github.com/qkaiser/broadcom-wps/issues/28>
+> (2026-10-20). Este archivo es la fuente del cuerpo del issue; si se edita,
+> volver a publicarlo o comentar la actualización.
+
 ## Context
 
 AURIS.net is an MIT-licensed, Wifite-style 802.11 audit framework (Python,

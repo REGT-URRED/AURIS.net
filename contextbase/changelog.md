@@ -7,6 +7,14 @@ evolución del sistema. Formato basado en Keep a Changelog.
 
 ## Cambios Realizados
 
+### 2026-10-20 — Publicación en GitHub
+
+- Push de `main` a `REGT-URRED/AURIS.net`: `baa378f`, `a24a16e`, `cc7dd3a`,
+  `55a742b` (más el amend `8400f30` con la referencia a #27).
+- Issue upstream abierto: <https://github.com/qkaiser/broadcom-wps/issues/28>
+  proponiendo una sección "Integrations" y ofreciendo un PR. El cuerpo vive en
+  `docs/upstream/broadcom-wps-integration.md`.
+
 ### 2026-10-20 — Licencia y propuesta de integración upstream
 
 - Se agregó `LICENSE` (MIT, 2026 REGT-URRED): el README lo declaraba pero el
