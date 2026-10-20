@@ -1,0 +1,45 @@
+{
+  "name": "contextbase",
+  "version": "1.0.0",
+  "description": "Sistema minimalista y universal de memoria persistente para proyectos y agentes de código (Antigravity, Claude Code, Cursor, OpenCode, etc.)",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "contextbase": "./bin/contextbase.js",
+    "cb": "./bin/contextbase.js",
+    "openwiki": "./bin/contextbase.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/REGT-URRED/CONTEXTBASE.git"
+  },
+  "homepage": "https://github.com/REGT-URRED/CONTEXTBASE#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node ./bin/contextbase.js",
+    "test": "node ./bin/contextbase.js status"
+  },
+  "keywords": [
+    "contextbase",
+    "memory",
+    "ai-agents",
+    "bitacora",
+    "repomix",
+    "antigravity",
+    "claude-code",
+    "cursor",
+    "changelog",
+    "tasklist"
+  ],
+  "author": "REGT (rafa) <U19211826.@utp.edu.pe>",
+  "license": "MIT"
+}
