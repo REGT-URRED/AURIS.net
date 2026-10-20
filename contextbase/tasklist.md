@@ -6,6 +6,9 @@ Seguimiento del estado de tareas con alto contraste visual.
 
 ## Tareas Completadas
 
+- [x] Agregar `LICENSE` MIT (el README ya lo declaraba)
+- [x] Redactar propuesta de integración upstream (`docs/upstream/`)
+
 - [x] Vendorizar broadcom-wps en `research/broadcom-wps/` con licencia y procedencia
 - [x] Subcomando `auris broadcom` (uv o Python 3.11 + scapy)
 - [x] Incluir `research/` en el paquete de campo y tests de integración
@@ -25,6 +28,9 @@ Seguimiento del estado de tareas con alto contraste visual.
 - [x] Documentar la integración en README y CHANGELOG
 
 ## Tareas Pendientes / En Progreso
+
+- [ ] Autenticar GitHub (`gh auth login`) y hacer push de `main`
+- [ ] Publicar el issue upstream en `qkaiser/broadcom-wps` con el texto de `docs/upstream/`
 
 - [ ] Cablear `pipeline.py` (PhaseProtocol) en `runner.py` y retirar el dispatcher legacy
 - [ ] Registrar `PSK_DEFAULTS` en `phases/__init__.py` (hoy solo en el camino legacy)

@@ -7,6 +7,14 @@ evolución del sistema. Formato basado en Keep a Changelog.
 
 ## Cambios Realizados
 
+### 2026-10-20 — Licencia y propuesta de integración upstream
+
+- Se agregó `LICENSE` (MIT, 2026 REGT-URRED): el README lo declaraba pero el
+  archivo no existía, lo que bloqueaba cualquier contribución upstream.
+- `docs/upstream/broadcom-wps-integration.md`: texto listo para abrir un issue
+  en `qkaiser/broadcom-wps` proponiendo una sección "Integrations" y ofreciendo
+  un PR. No se publicó: falta autenticación de GitHub en el entorno.
+
 ### 2026-10-20 — Consolidación de broadcom-wps dentro de AURIS.net
 
 - Se incorporó `research/broadcom-wps/` con el fingerprinter, las reglas YARA,
