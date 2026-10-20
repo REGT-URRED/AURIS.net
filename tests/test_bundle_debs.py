@@ -17,6 +17,13 @@ BUNDLE = os.path.join(ROOT, "offline_bundle")
 APT_DIR = os.path.join(BUNDLE, "apt_packages")
 WHEELS = os.path.join(BUNDLE, "wheels")
 
+# El bundle no se versiona (se genera con scripts/bootstrap.sh en una mÃ¡quina
+# con red). Sin Ã©l estas comprobaciones no aplican y no deben fallar.
+pytestmark = pytest.mark.skipif(
+    not os.path.isdir(BUNDLE),
+    reason="offline_bundle/ ausente: generarlo con scripts/bootstrap.sh",
+)
+
 
 def _debs():
     if not os.path.isdir(APT_DIR):

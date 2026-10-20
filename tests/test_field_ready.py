@@ -66,7 +66,7 @@ def test_report_footnote_simulated(tmp_path):
                 "elapsed_sec": 1}]
     out = str(tmp_path / "r.md")
     generate_markdown_report(results, {}, out)
-    text = open(out).read()
+    text = open(out, encoding="utf-8").read()
     assert "simuladas" in text
 
 
@@ -78,4 +78,4 @@ def test_report_no_footnote_without_alerts(tmp_path):
                 "elapsed_sec": 1}]
     out = str(tmp_path / "r.md")
     generate_markdown_report(results, {}, out)
-    assert "simuladas" not in open(out).read()
+    assert "simuladas" not in open(out, encoding="utf-8").read()

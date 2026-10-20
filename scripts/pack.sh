@@ -75,7 +75,7 @@ info "Empaquetando en: $OUTPUT_FILE"
 
 # Lista explícita: código + datos de ejemplo; fuera venv, basura y estado local
 PACK_ITEMS=(./setup.sh ./auris.py ./requirements.txt ./LEEME-USB.txt
-            ./src ./config ./scripts ./tests)
+            ./src ./config ./scripts ./tests ./contextbase ./tools ./research ./AGENTS.md)
 if [[ -f ./README.md ]]; then PACK_ITEMS+=(./README.md); fi
 if [[ -f ./CHANGELOG.md ]]; then PACK_ITEMS+=(./CHANGELOG.md); fi
 if [[ -d ./assets ]]; then PACK_ITEMS+=(./assets); fi

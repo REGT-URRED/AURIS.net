@@ -173,7 +173,7 @@ else
     warn "Verificando qué herramientas están disponibles en el sistema..."
 
     MISSING_PKGS=()
-    CHECK_PKGS=(aircrack-ng hcxdumptool hcxtools reaver hashcat iw wireless-tools python3 python3-pip python3-venv)
+    CHECK_PKGS=(aircrack-ng hcxdumptool hcxtools reaver hashcat iw wireless-tools python3 python3-pip python3-venv nodejs)
     for pkg in "${CHECK_PKGS[@]}"; do
         if dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
             success "  $pkg — ya instalado"
@@ -520,6 +520,25 @@ fi
 EOF
 chmod +x "$WRAPPER"
 success "Comando global instalado: $WRAPPER"
+
+# ── FASE 8b: ContextBase — memoria técnica persistente (Node >= 18) ───────────
+# El CLI está vendorizado en tools/contextbase (sin npm, sin red). Sólo se
+# expone el comando global y se informa el estado; nunca se ejecuta `init`
+# en campo, porque los documentos ya vienen versionados.
+if command -v node >/dev/null 2>&1; then
+    cat > /usr/local/bin/contextbase << EOF
+#!/usr/bin/env bash
+# Wrapper global autogenerado por setup.sh — delega en el repo.
+exec "$PROJECT_DIR/scripts/contextbase.sh" "\$@"
+EOF
+    chmod +x /usr/local/bin/contextbase
+    success "Comando global instalado: /usr/local/bin/contextbase"
+    bash "$PROJECT_DIR/scripts/contextbase.sh" status 2>>"$LOG_FILE" \
+        || warn "contextbase responde con error — revisa $LOG_FILE"
+else
+    warn "Node.js no encontrado: contextbase queda inactivo."
+    warn "AURIS funciona igual; para la bitácora técnica: sudo apt install nodejs"
+fi
 
 # ── Verificación final (doctor) ────────────────────────────────────────────────
 echo ""

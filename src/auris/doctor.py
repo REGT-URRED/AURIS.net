@@ -149,6 +149,39 @@ def check_db(project_dir: str) -> CheckResult:
             "Base de datos no inicializada — ejecutar: python3 auris.py db-init")
 
 
+def check_contextbase(project_dir: str) -> List[CheckResult]:
+    """Verifica el CLI vendorizado y los tres documentos de memoria técnica."""
+    results = []
+    node = shutil.which("node")
+    if node is None:
+        results.append(CheckResult("contextbase", "warn",
+            "Node.js no encontrado — memoria técnica inactiva (apt install nodejs)"))
+        return results
+    try:
+        major = int(subprocess.run(
+            [node, "-p", "process.versions.node.split('.')[0]"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip())
+    except Exception:
+        major = 0
+    results.append(CheckResult(
+        "Node.js", "ok" if major >= 18 else "warn",
+        f"{node} — v{major}" if major else f"{node} — versión no detectada",
+    ))
+    if not os.path.isfile(os.path.join(project_dir, "scripts", "contextbase.sh")):
+        results.append(CheckResult("contextbase", "warn", "falta scripts/contextbase.sh"))
+        return results
+    docs = [os.path.join(project_dir, "contextbase", name)
+            for name in ("fundamentos.md", "changelog.md", "tasklist.md")]
+    missing = [os.path.basename(d) for d in docs if not os.path.isfile(d)]
+    if missing:
+        results.append(CheckResult("contextbase", "warn",
+            f"documentos ausentes: {', '.join(missing)} — git checkout -- contextbase/"))
+    else:
+        results.append(CheckResult("contextbase", "ok", "memoria técnica completa"))
+    return results
+
+
 def check_root() -> CheckResult:
     """Verifica si se está ejecutando con privilegios necesarios."""
     if os.geteuid() == 0:
@@ -230,6 +263,10 @@ def run_doctor(project_dir: Optional[str] = None) -> bool:
     header("Configuración del proyecto")
     results.append(check_scope(project_dir))
     results.append(check_db(project_dir))
+    # ── 7. Memoria técnica persistente ────────────────────────────────────────
+    header("Memoria técnica")
+    results.extend(check_contextbase(project_dir))
+
 
     # ── Imprimir tabla de resultados ──────────────────────────────────────────
     print("")

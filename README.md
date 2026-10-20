@@ -67,8 +67,14 @@ AURIS.net/
 |   `-- seed/                   # Base de conocimiento de fabricantes (OUI) y CWE
 |-- scripts/
 |   |-- bootstrap.sh            # Descarga y preparacion de dependencias
+|   |-- contextbase.sh          # Wrapper del CLI de memoria tecnica (Node >= 18)
 |   |-- pack.sh                 # Generador de paquete comprimido para despliegue USB
 |   `-- setup.sh                # Instalador desatendido para estaciones de campo
+|-- tools/
+|   `-- contextbase/            # CLI de memoria persistente vendorizado (sin npm)
+|-- research/
+|   `-- broadcom-wps/           # Inteligencia Broadcom: fingerprinter + reglas YARA (MIT)
+|-- contextbase/                # Fundamentos, changelog y tasklist del proyecto
 |-- tests/                      # Suite de pruebas unitarias e integracion
 |-- CHANGELOG.md                # Registro historico de versiones y cambios
 `-- auris.py                    # Punto de entrada de ejecucion directa
@@ -78,6 +84,8 @@ AURIS.net/
 
 - Sistema operativo: Linux (Kali Linux, Parrot OS, Debian 12+, Ubuntu 22.04+).
 - Python: version 3.10 o superior.
+- Node.js: version 18 o superior (solo para la memoria técnica `contextbase`; AURIS funciona sin él).
+- Opcional para `auris broadcom`: `uv` o Python 3.11+ con `scapy`.
 - Herramientas auxiliares (segun las fases a ejecutar): `aircrack-ng`, `hcxdumptool` (6.3.1+), `hcxtools`, `reaver`, `bully`, `pixiewps`, `wash`, `iw`.
 
 ## Instalacion y Puesta en Marcha
@@ -202,6 +210,49 @@ Para ejecutar la suite de pruebas unitarias:
 
 ```bash
 PYTHONPATH=src pytest tests/ -v
+```
+
+## Inteligencia Broadcom (research/broadcom-wps)
+
+Código MIT de [qkaiser/broadcom-wps](https://github.com/qkaiser/broadcom-wps)
+vendorizado para evaluar CPEs con SDK Broadcom. Detecta dos cosas: si el AP
+expone el IE propietario de Broadcom y si responde como `wps_monitor`
+(vulnerable) o como `hostapd` parcheado. No explota nada.
+
+```bash
+# Requiere interfaz en modo monitor + uv (o Python 3.11+ con scapy)
+sudo auris broadcom --interface wlan0mon --ssid "MOVISTAR_XXXX"
+
+# Análisis estático de firmware extraído
+yara -w -r research/broadcom-wps/broadcom_wps_monitor.yar firmware_extraido/
+```
+
+Detalles, procedencia y límites: `research/broadcom-wps/VENDOR.md`.
+
+## Memoria Técnica Persistente (contextbase)
+
+El repositorio mantiene una bitácora viva en `contextbase/` (`fundamentos.md`,
+`changelog.md`, `tasklist.md`) que cualquier agente de código o desarrollador
+debe actualizar al cerrar un cambio. El CLI está vendorizado en
+`tools/contextbase/` y **no requiere npm ni internet**: sólo Node.js >= 18.
+
+```bash
+bash scripts/contextbase.sh status          # estado y progreso de tareas
+bash scripts/contextbase.sh log "mensaje"   # registrar cambio realizado
+bash scripts/contextbase.sh task add "..."  # nueva tarea pendiente
+bash scripts/contextbase.sh task done "..." # completar tarea
+bash scripts/contextbase.sh dump            # volcar los tres documentos
+```
+
+`setup.sh` instala `nodejs` desde el bundle offline (si está disponible), expone
+el comando global `/usr/local/bin/contextbase` y verifica la memoria al final.
+`auris doctor` incluye esa verificación. El paquete de campo (`pack.sh`) viaja
+con `contextbase/` y `tools/` adentro.
+
+Instalación manual del requisito, si el bundle no trae el `.deb`:
+
+```bash
+sudo apt install nodejs   # Debian/Kali/Ubuntu; requiere Node >= 18
 ```
 
 ## Aviso Legal y Etica

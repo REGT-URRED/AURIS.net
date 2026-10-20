@@ -103,6 +103,7 @@ def test_enforce_selection_consent_signs_session():
                       selection_consent=False)
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="sysfs/ip link: sÃ³lo Linux")
 def test_mac_stable_loopback():
     mac = read_iface_mac("lo")
     assert mac  # sysfs legible en Linux

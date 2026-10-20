@@ -12,7 +12,7 @@ from auris.vendor_profiles import (
 def test_offline_module_no_sockets():
     """El módulo de inteligencia debe ser 100% offline: sin sockets ni HTTP."""
     import auris.vendor_profiles as vp
-    src = open(vp.__file__).read()
+    src = open(vp.__file__, encoding="utf-8").read()
     for banned in ("import socket", "import requests", "urllib", "http.client"):
         assert banned not in src, f"módulo no-offline: usa {banned}"
 

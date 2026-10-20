@@ -341,6 +341,50 @@ def candidates_command(
     console.print(f"\n  [dim]Total generados: {cset.total} | SSID: {cset.ssid} | Semillas: {gen_time}[/dim]")
 
 
+@app.command(name="broadcom")
+def broadcom_command(
+    interface: str = typer.Option(..., help="Interfaz YA en modo monitor (ej: wlan0mon)"),
+    ssid: str = typer.Option(..., help="SSID exacto del AP objetivo"),
+    debug_assoc: bool = typer.Option(
+        False, "--debug-assoc", help="Loguear códigos de autenticación/asociación 802.11"
+    ),
+):
+    """
+    Fingerprint Broadcom WPS (wps_monitor vs hostapd) sobre una interfaz en
+    modo monitor. Delega en research/broadcom-wps/broadcom_fingerprint.py:
+    requiere `uv` o Python 3.11+ con `scapy`, y confirmación RoE del objetivo.
+    """
+    import shutil
+    import subprocess
+    import sys
+
+    project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+    script = os.path.join(project_dir, "research", "broadcom-wps", "broadcom_fingerprint.py")
+    if not os.path.isfile(script):
+        console.print("[red][ERR][/red] No se encontró research/broadcom-wps/broadcom_fingerprint.py")
+        raise typer.Exit(1)
+
+    args = ["--interface", interface, "--ssid", ssid]
+    if debug_assoc:
+        args.append("--debug-assoc")
+
+    if shutil.which("uv"):
+        cmd = ["uv", "run", "--with", "scapy", script, *args]
+    elif sys.version_info >= (3, 11):
+        try:
+            import scapy  # noqa: F401
+        except ImportError:
+            console.print("[red][ERR][/red] Falta scapy: pip install scapy (o instala uv)")
+            raise typer.Exit(1)
+        cmd = [sys.executable, script, *args]
+    else:
+        console.print("[red][ERR][/red] El fingerprinter requiere Python 3.11+ o uv.")
+        raise typer.Exit(1)
+
+    console.print(f"  [dim]{' '.join(cmd)}[/dim]")
+    raise typer.Exit(subprocess.call(cmd))
+
+
 @app.command(name="run-all")
 def run_all(
     iface: str = typer.Option("wlan0", help="Interfaz WiFi (modo monitor) para Red Team"),

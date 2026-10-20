@@ -267,6 +267,7 @@ def test_psk_fases_sin_herramientas_no_crashean(tmp_path):
         R._tool_available = orig
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="shim /bin/sh no ejecutable en Windows")
 def test_fallback_aircrack_ng_crackea_psk(tmp_path, monkeypatch):
     """Sin hashcat, el fallback aircrack-ng debe devolver la clave ya parseada."""
     import os as _os
@@ -313,6 +314,7 @@ def test_fallback_aircrack_ng_sin_clave_devuelve_exhausted(tmp_path, monkeypatch
     assert key is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="shim /bin/sh no ejecutable en Windows")
 def test_pixie_cae_a_bully_si_no_hay_reaver(tmp_path, monkeypatch):
     """Sin reaver, el Pixie Dust debe intentarse con bully -d, no rendirse."""
     import os as _os

@@ -1,0 +1,5 @@
+# AURIS.net se instala sólo en Linux: scripts LF sí o sí.
+# Un CRLF en setup.sh rompe `bash` con "syntax error near unexpected token".
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf

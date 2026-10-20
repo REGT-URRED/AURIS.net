@@ -8,6 +8,26 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 ## [No publicado]
 
 ### Añadido
+- Inteligencia Broadcom vendorizada en `research/broadcom-wps/` (MIT, commit
+  `0727296`): fingerprinter `wps_monitor` vs `hostapd`, reglas YARA ELF32
+  ARM/MIPS y `VENDOR.md` con procedencia y límites. Subcomando nuevo
+  `auris broadcom --interface <mon> --ssid <ssid>`; `pack.sh` incluye
+  `research/` en el paquete de campo.
+- Memoria técnica persistente `contextbase/` (`fundamentos.md`, `changelog.md`,
+  `tasklist.md`) con arquitectura real del proyecto, deuda técnica y comandos.
+  Reglas inyectadas en `AGENTS.md`, `CLAUDE.md`, `.cursorrules` y
+  `.windsurfrules`; todo agente debe actualizarla al cerrar un cambio.
+- CLI ContextBase v1.0.0 vendorizado en `tools/contextbase/` (Node ESM, sin
+  dependencias npm) y wrapper POSIX `scripts/contextbase.sh` que valida
+  Node >= 18 y resuelve la raíz del repo. No requiere red ni npm.
+- Integración de instalación: `setup.sh` expone `/usr/local/bin/contextbase` y
+  verifica la memoria; `bootstrap.sh` agrega `nodejs` al bundle offline;
+  `pack.sh` incluye `contextbase/` y `tools/`; `auris doctor` reporta Node y
+  los tres documentos.
+- `tests/test_contextbase.py` (CLI, documentos, reglas, wiring de instalación
+  y regresión de `task done`).
+- `.gitattributes` con `eol=lf` para `.sh`/`.py`: un CRLF en `setup.sh` rompe
+  `bash` con "syntax error near unexpected token".
 - Flujo wifite puro sin BSSIDs previos: `allowed_bssids: []` = modo
   selección; la marca explícita tras el scan (prompt tecleado / `--targets` /
   `--target-bssid`) ES la firma RoE (`selection_consent`). `sudo auris run-all`
@@ -29,6 +49,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
   `tests/test_target_select.py`.
 
 ### Corregido
+- Suite de tests portable: `test_bundle_debs` se omite cuando falta
+  `offline_bundle/`, los shims `/bin/sh` y `test_mac_stable_loopback` se omiten
+  fuera de Linux, y las lecturas de archivos en tests usan UTF-8 explícito
+  (en Windows `cp1252` rompía con `UnicodeDecodeError`).
+- `contextbase task done` lanzaba `ReferenceError` (`lines`, `matched` y `query`
+  sin declarar en `runTask`); ahora el bucle usa variables locales y mueve la
+  tarea a "Completadas". `installSkill()` además instala la skill en OpenCode
+  (`~/.config/opencode/skills/contextbase`).
 - `setup.sh` moría en silencio tras "118 paquetes .deb" por `set -e + pipefail`
   + `grep` sin match en .deb sin dependencia libc6 (ca-certificates, fonts…):
   añadido `|| true` al filtro de glibc (y al `ls` de pip wheel).

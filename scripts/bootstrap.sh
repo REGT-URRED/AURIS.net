@@ -104,6 +104,8 @@ REQUIRED_PKGS=(
     tar
     curl
     ca-certificates
+    # Memoria técnica persistente (contextbase)
+    nodejs
 )
 
 # Construir lista completa con dependencias transitivas

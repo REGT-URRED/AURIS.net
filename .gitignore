@@ -55,3 +55,14 @@ config/scope.yml
 .pytest_cache/
 .coverage
 htmlcov/
+
+# ContextBase: artefactos generados (la memoria sí se versiona)
+contextbase-pack.txt
+node_modules/
+
+# Fingerprint Broadcom: artefactos por corrida (result.json + traffic.pcap)
+broadcom-fingerprint-*/
+
+# Cachés locales de agentes/analizadores
+.atl/
+.ruff_cache/
