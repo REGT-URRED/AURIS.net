@@ -6,11 +6,11 @@ Flujo principal (un solo comando):
     sudo auris
 
 Lo que hace internamente:
-    wlan0 → MONITOR MODE (wlan0mon)
-    → Scan (airodump-ng + wash)
-    → Por cada red: PROFILE → STRIDE → EXEC secuencial
-    → Informe Markdown + JSON en reports/
-    → Restaurar wlan0
+    wlan0 -> MONITOR MODE (wlan0mon)
+    -> Scan (airodump-ng + wash)
+    -> Por cada red: PROFILE -> STRIDE -> EXEC secuencial
+    -> Informe Markdown + JSON en reports/
+    -> Restaurar wlan0
 """
 import os
 import csv
@@ -486,6 +486,8 @@ def run_all(
     select: bool = typer.Option(True, "--select/--no-select", help="Pausar tras el scan para marcar redes (estilo wifite). --no-select = todas automático."),
     targets: str = typer.Option("", help="Selección no interactiva: '1,3-5,all' (para scripts/offline auto)"),
     all_targets: bool = typer.Option(False, "--all", help="Auditar todas sin preguntar (atajo de --no-select)"),
+    auto: bool = typer.Option(False, "--auto", help="Elegir automáticamente los mejores objetivos (ranking offline)"),
+    top: int = typer.Option(0, "--top", help="Con --auto: auditar solo los N mejores (0 = todos)"),
 ):
     """
     Automatización completa estilo wifite: escanea, deja marcar y audita en secuencia.
@@ -493,11 +495,22 @@ def run_all(
     Flujo secuencial automático:
       1. Escanear redes en el aire (20-30s, el escáner se detiene solo)
       2. Marcar redes objetivo (prompt interactivo o --targets/--all/--no-select)
-      3. Por cada red marcada: PROFILE → STRIDE → DECIDE → EXEC → REPORT
+      3. Por cada red marcada: PROFILE -> STRIDE -> DECIDE -> EXEC -> REPORT
       4. Resumen final de toda la sesión
     """
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     banner()
+
+    from .targeting import affected_models, select_targets
+
+    if auto and (target_bssid or targets.strip() or all_targets or not select):
+        console.print(
+            "[red][ERR][/red] --auto es incompatible con --target-bssid/--targets/--all/--no-select"
+        )
+        raise typer.Exit(1)
+    if top and not auto:
+        console.print("[red][ERR][/red] --top requiere --auto")
+        raise typer.Exit(1)
 
     # ── Verificar scope ────────────────────────────────────────────────────────
     scope_path = os.path.join(project_dir, scope_file)
@@ -611,6 +624,35 @@ def run_all(
             console.print(f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas vía --targets: {picked}")
             raw_targets = [raw_targets[i - 1] for i in picked]
             consent_explicit = True
+        elif auto:
+            ranked = select_targets(raw_targets, top)
+            if not ranked:
+                console.print("  [yellow][SELECT] ranking vacío. Abortando.[/yellow]")
+                return
+            console.print(
+                Rule("[bold cyan]Selección automática — ranking[/bold cyan]", style="cyan")
+            )
+            from rich.table import Table as _RankingTable
+
+            ranking = _RankingTable(show_header=True, header_style="bold cyan")
+            ranking.add_column("#", width=3, style="dim")
+            ranking.add_column("Puntaje", justify="right", width=8)
+            ranking.add_column("SSID", style="green")
+            ranking.add_column("BSSID", style="dim")
+            ranking.add_column("Motivos")
+            for index, item in enumerate(ranked, 1):
+                ranking.add_row(
+                    str(index),
+                    str(item.score),
+                    item.ssid,
+                    item.bssid,
+                    ", ".join(item.reasons),
+                )
+            console.print(ranking)
+            raw_targets = [item.target for item in ranked]
+            console.print(
+                f"  [cyan][SELECT][/cyan] {len(raw_targets)} objetivo(s) elegidos por ranking"
+            )
         elif all_targets or not select:
             console.print(f"  [dim][SELECT] modo automático — {len(raw_targets)} redes (todas)[/dim]")
         else:
@@ -700,6 +742,7 @@ def run_all(
                     ssid=raw.get("ssid", ""), bssid=raw.get("bssid", ""),
                     brand=profile.brand,
                 )
+                raw["broadcom_catalog"] = affected_models(profile.brand)
                 save_progress(sess["path"], raw)
                 all_results.append(raw)
                 continue
@@ -719,6 +762,7 @@ def run_all(
                 ssid=raw.get("ssid", ""), bssid=raw.get("bssid", ""),
                 brand=profile.brand,
             )
+            result["broadcom_catalog"] = affected_models(profile.brand)
             save_progress(sess["path"], result)
             all_results.append(result)
 

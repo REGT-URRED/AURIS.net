@@ -6,6 +6,9 @@ Seguimiento del estado de tareas con alto contraste visual.
 
 ## Tareas Completadas
 
+- [x] Ranking autónomo de objetivos (`--auto`, `--top`) y enriquecimiento Broadcom
+- [x] Tests de targeting (señal, WPS, cifrado, catálogo, top-N)
+
 - [x] Catálogo offline de equipos Broadcom (`data/seed/broadcom_affected.csv`)
 - [x] `auris broadcom` con modos `--lookup`, `--firmware` y fingerprint
 - [x] Reporte de artefactos Broadcom en `auris doctor`

@@ -33,6 +33,7 @@ AURIS.net implementa una arquitectura desacoplada para la evaluacion de disposit
 
 - **Flujo Interactivo Estilo Wifite:** Escaneo rapido del espectro (25s por defecto), pausa automatica y seleccion interactiva de objetivos (`1,3-5`, `all`, `q`). La seleccion explicita actua como firma y consentimiento RoE en tiempo real, eliminando la necesidad de precargar BSSIDs manualmente.
 - **Top-20 Defaults Sigiloso (Fase PSK_DEFAULTS):** Evaluacion ultrarrapida de las 20 claves por defecto/humanas mas comunes inmediatamente tras la captura de PMKID/Handshake, con cadencia de micro-pausas y jitter (2-5s) para evadir WIDS. Si acierta, omite automaticamente las fases pesadas (WPS Pixie/PIN y cracking por diccionario masivo).
+- **Seleccion Autonoma por Ranking:** `--auto` puntua cada red (señal, WPS abierto/lockout, cifrado, clientes y catálogo Broadcom) y audita los mejores objetivos sin preguntar; `--top N` limita la tanda. La firma RoE sigue siendo explícita (`--force-roe`).
 - **Hardware Abstraction Layer (HAL Userland):** Catalogo y deteccion de 14 chipsets inalambricos (Atheros AR9271, Realtek RTL8812AU/RTL8187L/RTL8814AU/RTL8821AU, MediaTek MT7601U/MT7610U/MT7612U/MT7921/MT7925, Ralink RT3070/RT5370, Intel iwlwifi), gestionando inyeccion y bandas operativas sin dependencias de alto nivel.
 - **Pipeline Modular por Fases:** Motor orquestador basado en el contrato formal `PhaseProtocol`. Cada vector de prueba (Captura PMKID/Handshake con `hcxdumptool` 6.3.1+, PSK Defaults, WPS Pixie Dust dual con Reaver/Bully, Fuerza Bruta PIN, WPS PBC, PSK Cracking multi-backend) opera de manera aislada e independiente.
 - **Resiliencia de Modo Monitor:** Adopcion automatica de interfaces renombradas (`wlan0mon`) aun cuando `airmon-ng` reporte retornos atipicos (`rc=1`), verificacion de NetworkManager y reinicializacion limpia al finalizar.
@@ -172,6 +173,11 @@ El ejecutable `auris.py` (o comando `auris`) expone los siguientes subcomandos p
   # Auditar todas las redes detectadas
   sudo auris run-all --force-roe --all
 
+  # Autónomo: ranking offline (señal, WPS, cifrado, clientes, catálogo Broadcom)
+  # y auditoría de los mejores objetivos sin preguntar
+  sudo auris run-all --force-roe --auto
+  sudo auris run-all --force-roe --auto --top 3
+
   # Reanudar la sesion interrumpida previa
   sudo auris run-all --resume-last
 
@@ -270,3 +276,19 @@ AURIS.net ha sido desarrollado con fines academicos, de investigacion en ciberse
 ## Licencia
 
 Distribuido bajo la Licencia MIT. Consulte el archivo LICENSE para mas detalles.
+
+## Integrations
+
+Projects that vendor or wrap these detectors:
+
+| Project | What it adds |
+|---------|--------------|
+| [AURIS.net](https://github.com/REGT-URRED/AURIS.net) | Wifite-style 802.11 audit framework (RoE gating, phase engine, offline field bundle) that vendors the fingerprinter and YARA rules, ships an offline affected-device catalog, and exposes `auris broadcom` for catalog lookup, firmware scanning and live fingerprinting. |
+
+## Integrations
+
+Projects that vendor or wrap these detectors:
+
+| Project | What it adds |
+|---------|--------------|
+| [AURIS.net](https://github.com/REGT-URRED/AURIS.net) | Wifite-style 802.11 audit framework (RoE gating, phase engine, offline field bundle) that vendors the fingerprinter and YARA rules, ships an offline affected-device catalog, and exposes `auris broadcom` for catalog lookup, firmware scanning and live fingerprinting. |

@@ -210,6 +210,10 @@ def check_broadcom(project_dir: str) -> List[CheckResult]:
 
 def check_root() -> CheckResult:
     """Verifica si se está ejecutando con privilegios necesarios."""
+    if not hasattr(os, "geteuid"):
+        return CheckResult(
+            "root/sudo", "warn", "No soportado en este SO - AURIS corre en Linux"
+        )
     if os.geteuid() == 0:
         return CheckResult("root/sudo", "ok", "Ejecutando como root")
     else:

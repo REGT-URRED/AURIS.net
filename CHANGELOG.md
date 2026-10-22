@@ -8,6 +8,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 ## [No publicado]
 
 ### Añadido
+- Selección autónoma de objetivos: `run-all --auto` puntúa cada red (señal,
+  WPS abierto/lockout, WEP/WPA, WPA3 penalizado, clientes y catálogo Broadcom),
+  imprime el ranking y audita los mejores sin preguntar; `--top N` limita la
+  tanda. El modo automático sigue exigiendo `--force-roe` (la firma RoE no se
+  automatiza) y cada resultado guarda `broadcom_catalog`.
 - Integración funcional completa de Broadcom WPS: catálogo offline de 57
   equipos afectados y 4 parcheados (`data/seed/broadcom_affected.csv`),
   `src/auris/broadcom.py` (lookup, orquestación del fingerprinter y escaneo

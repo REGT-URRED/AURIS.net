@@ -55,7 +55,7 @@ def test_corrupt_scope_clean_exit(tmp_path):
     bad.write_text("foo: [bar\n:baz")
     r = subprocess.run(
         [sys.executable, "auris.py", "run-all", "--scope-file", str(bad), "--dry-run"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, text=True, encoding="utf-8", timeout=60,
         cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     assert r.returncode == 1
     assert "Traceback" not in (r.stdout + r.stderr)

@@ -7,6 +7,16 @@ evolución del sistema. Formato basado en Keep a Changelog.
 
 ## Cambios Realizados
 
+### 2026-10-22 — Selección autónoma de objetivos (`--auto`)
+
+- `src/auris/targeting.py`: ranking explicable (señal, WPS abierto/lockout,
+  WEP/WPA, WPA3 penalizado, clientes y catálogo Broadcom) con `--top N`.
+- `run-all --auto` imprime el ranking y audita esa selección sin preguntar.
+  No firma el RoE: en modo automático sigue exigiendo `--force-roe`.
+- El resultado de cada AP guarda `broadcom_catalog` (modelos afectados del
+  fabricante) en el JSON de sesión e informe.
+- Tests: `tests/test_targeting.py` (8 casos). Suite: 146 passed, 14 skipped.
+
 ### 2026-10-22 — Integración funcional completa de Broadcom WPS
 
 - `src/auris/broadcom.py`: catálogo offline (`lookup`), orquestación del

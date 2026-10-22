@@ -63,6 +63,7 @@ contexto técnico que debe sobrevivir entre sesiones y entre agentes de código.
 | `vendor_profiles.py` | Base de conocimiento offline: marcas, OEMs, deuda histórica de firmware, evidencia de reutilización de PSK entre APs hermanos. |
 | `roe.py` | Alcance, ventana temporal, firma de sesión, MAC estable, cadena de custodia y directorio de evidencia. |
 | `session.py` | Persistencia atómica del progreso (tmp + rename) y reanudación (`--resume-last`, `--resume-file`). |
+| `targeting.py` | Ranking offline para `--auto`: señal, WPS abierto/lockout, cifrado, clientes y catálogo Broadcom. Ordena y explica; no firma por el operador. |
 | `db.py` / `models.py` | SQLAlchemy (`Vendor`, catálogo CWE) y modelos Pydantic (`TargetInfo`, `Profile`, `ThreatModelSTRIDE`). |
 | `report_writer.py` / `reporter.py` | Informe académico Markdown/JSON con mapeo MITRE ATT&CK / D3FEND. |
 | `wids.py` | Sensor defensivo. **Estado actual: SIMULADO**; las alertas se etiquetan `[SIMULATED]` en el informe. |
@@ -79,7 +80,7 @@ contexto técnico que debe sobrevivir entre sesiones y entre agentes de código.
 4. **Escaneo:** 25 s por defecto; `--target-bssid` omite el escaneo.
 5. **Filtro de scope:** lista blanca vacía = modo wifite (la autorización la da
    el marcado); lista blanca real = filtrado estricto.
-6. **Selección:** prompt interactivo, `--targets`, `--all` o `--no-select`.
+6. **Selección:** prompt interactivo, `--targets`, `--auto` (ranking offline), `--all` o `--no-select`.
 7. **Puerta RoE fase B:** la selección explícita es la firma de sesión.
 8. **Por target:** `PROFILE → STRIDE → DECIDE → EXEC → REPORT`, con corte
    temprano si se recupera credencial.
