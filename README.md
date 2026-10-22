@@ -243,6 +243,26 @@ El fingerprint deja `result.json` y `traffic.pcap` en
 `evidence/broadcom-fingerprint-<timestamp>/`. Detalles, procedencia y límites:
 `research/broadcom-wps/VENDOR.md`.
 
+## Ruta Secuencial de Evaluacion
+
+`auris run-all --auto` audita cada red con una cadena de evaluación secuencial
+(bajo RoE y scope firmados): primero verifica la superficie Broadcom WPS y
+ajusta el resto del recorrido a lo que observa en cada AP.
+
+1. `BROADCOM_EVAL` corre solo en APs con WPS: fingerprint en vivo
+   (`research/broadcom-wps/`) con tiempos límite. Si el AP responde como
+   `hostapd` parcheado, las fases exclusivas de WPS se marcan `skipped` y
+   continúa la ruta PSK; si expone `wps_monitor` vulnerable, se registra el
+   zero-day verificado y la cadena WPS continúa.
+2. El informe final reúne `## Contraseñas recuperadas` y
+   `## Vulnerabilidades verificadas` por AP, y a nivel sistema escribe el
+   archivo plano `reports/auris_<timestamp>_claves.txt`
+   (`SSID;BSSID;tipo;clave`), creado solo cuando hay claves recuperadas.
+3. El análisis es tolerante a datos incompletos: filas de escaneo sin BSSID se
+   omiten con aviso, la señal faltante se puntúa como "señal desconocida" y
+   cada subsección del informe que falte por datos incompletos queda anotada
+   al pie.
+
 ## Memoria Técnica Persistente (contextbase)
 
 El repositorio mantiene una bitácora viva en `contextbase/` (`fundamentos.md`,

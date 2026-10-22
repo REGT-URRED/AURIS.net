@@ -39,11 +39,12 @@ def _int(value, default: int = 0) -> int:
 
 
 def brand_of(target: Dict) -> str:
-    return resolve_brand(
-        target.get("oui", ""),
-        target.get("ssid", ""),
-        target.get("brand", "Unknown"),
-    )
+    # Marca explícita de la fila tiene prioridad; recién sin ella se resuelve
+    # por OUI/catálogo/SSID (resolve_brand aplica sus propios guardas "?"/"Unknown").
+    brand = str(target.get("brand") or "").strip()
+    if brand.lower() not in ("", "?", "unknown"):
+        return brand
+    return resolve_brand(target.get("oui", ""), target.get("ssid", ""))
 
 
 def affected_models(vendor: str) -> List[str]:
@@ -65,11 +66,14 @@ def score_target(target: Dict) -> RankedTarget:
     score = 0
     reasons: List[str] = []
 
-    rssi = _int(target.get("signal_strength"), -100)
+    raw_signal = target.get("signal_strength")
+    rssi = _int(raw_signal, -100)
     signal_points = max(0, min(60, 100 + rssi))
     score += signal_points
     if signal_points >= 45:
         reasons.append(f"señal fuerte ({rssi} dBm)")
+    if raw_signal in (None, ""):
+        reasons.append("señal desconocida")
 
     if target.get("wps_enabled"):
         if target.get("wps_locked"):

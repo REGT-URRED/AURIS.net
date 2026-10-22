@@ -53,8 +53,8 @@ contexto técnico que debe sobrevivir entre sesiones y entre agentes de código.
 | `cli.py` | Comandos Typer: `run-all`, `doctor`, `hal`, `candidates`, `db-init`, `verify-rockyou`. Orquesta el flujo completo y las puertas RoE. |
 | `monitor.py` | Modo monitor: orden manual `ip`+`iw` primero (compatible hcxdumptool 6.3.1), `airmon-ng` como fallback, adopción de interfaces renombradas, restauración verificada de NetworkManager. |
 | `scanner.py` | Descubrimiento: `hcxdumptool` > `wash` > `airodump-ng`, normalizado a la misma estructura de targets. |
-| `decision_engine.py` | Modelo STRIDE (`calculate_stride_threat`) y árbol de decisión de path (`decide_path`). |
-| `runner.py` | Ejecución de UN target: dispatcher secuencial de fases, presupuestos de tiempo, corte temprano al crackear, WIDS opcional. |
+| `decision_engine.py` | Modelo STRIDE (`calculate_stride_threat`) y árbol de decisión de path (`decide_path`). Prepóna `BROADCOM_EVAL` a las rutas WPS. |
+| `runner.py` | Ejecución de UN target: dispatcher secuencial de fases, presupuestos de tiempo, corte temprano al crackear, WIDS opcional. Incluye `BROADCOM_EVAL` (fingerprint Broadcom, fuera de `ATTACK_PHASES`); si reporta hostapd parcheado, omite solo las fases WPS. |
 | `pipeline.py` | Orquestador basado en `PhaseProtocol` + `PhaseResult` (módulo nuevo, aún no cableado desde `runner.py`; ver deuda técnica). |
 | `phases/` | Clases de fase: `capture`, `wps`, `psk`, `network`, `governance`, con contrato en `base.py`. |
 | `adapters/` | Frontera con herramientas externas: `capture` (hcxdumptool/airodump), `cracker` (hashcat/aircrack/reaver/bully), `tool_runner` (único punto de `subprocess`). |
@@ -84,7 +84,9 @@ contexto técnico que debe sobrevivir entre sesiones y entre agentes de código.
 7. **Puerta RoE fase B:** la selección explícita es la firma de sesión.
 8. **Por target:** `PROFILE → STRIDE → DECIDE → EXEC → REPORT`, con corte
    temprano si se recupera credencial.
-9. **Informes:** `reports/auris_<ts>.json` y `..._informe.md`.
+9. **Informes:** `reports/auris_<ts>.json`, `..._informe.md` (con
+   `## Contraseñas recuperadas` y `## Vulnerabilidades verificadas`) y
+   `..._claves.txt` (plano `SSID;BSSID;tipo;clave`, solo con claves).
 10. **Cierre:** verificación de MAC estable si el scope lo exige.
 
 ### 3.3 Fases y presupuesto
@@ -118,10 +120,16 @@ Broadcom, integrado en tres capas:
 `LIKELY_VULNERABLE` es evidencia de familia de implementación, no prueba de
 explotabilidad. `PATCHED_HOSTAPD` no exime de revisar el resto de la superficie.
 
+Desde la cadena secuencial, el fingerprint corre en `run-all` como la fase
+`BROADCOM_EVAL` (no ofensiva: solo sondea y clasifica) con tiempos límite
+(240 s fingerprint, 120 s YARA). Si el veredicto es `PATCHED_HOSTAPD`, se
+marcan `skipped` las fases exclusivas de WPS y continúa la ruta PSK.
+
 ### 3.5 Deuda técnica conocida
 
 - `pipeline.py` está implementado y testeado, pero `run_single_target` sigue
-  usando el dispatcher `if/elif` legacy de `runner.py`.
+  usando el dispatcher `if/elif` legacy de `runner.py`. Cableado aplazado: la
+  evaluación secuencial se implementó directo en el dispatcher.
 - `wids.py` emite alertas simuladas; falta integrarlo a tramas reales del HAL.
 - La HAL declara el contrato USB (`WirelessTransceiver`) pero no hay backend
   PyUSB instalado por defecto: la operación es por herramientas del sistema.

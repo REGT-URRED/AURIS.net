@@ -8,6 +8,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 ## [No publicado]
 
 ### Añadido
+- Cadena de evaluación secuencial `BROADCOM_EVAL`: `run-all` prepone el
+  fingerprint Broadcom a las rutas WPS; si reporta `hostapd` parcheado omite
+  las fases exclusivas de WPS y continúa la ruta restante (PSK), y si expone
+  `wps_monitor` vulnerable registra el zero-day verificado y sigue la cadena.
+- Informe final enriquecido: secciones `## Contraseñas recuperadas` y
+  `## Vulnerabilidades verificadas`, más el archivo plano
+  `reports/auris_<ts>_claves.txt` (`SSID;BSSID;tipo;clave`), creado solo cuando
+  hay credenciales recuperadas en la sesión.
+- Robustez del análisis: timeouts en el fingerprinter Broadcom (240/180/120 s),
+  guardia de filas de escaneo sin BSSID, motivo "señal desconocida" al
+  puntuar, aviso único si el mapa OUI no parsea y notas al pie del informe por
+  cada subsección omitida. Tests: `tests/test_eval_chain.py` (14 casos).
+  Suite: 160 passed, 14 skipped.
 - Selección autónoma de objetivos: `run-all --auto` puntúa cada red (señal,
   WPS abierto/lockout, WEP/WPA, WPA3 penalizado, clientes y catálogo Broadcom),
   imprime el ranking y audita los mejores sin preguntar; `--top N` limita la

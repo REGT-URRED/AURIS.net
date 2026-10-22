@@ -6,6 +6,14 @@ Seguimiento del estado de tareas con alto contraste visual.
 
 ## Tareas Completadas
 
+- [x] Cadena de evaluación secuencial `BROADCOM_EVAL`: prepone el fingerprint
+  Broadcom en las rutas WPS y salta las fases WPS cuando el AP está parcheado
+- [x] Informe final: `## Contraseñas recuperadas`,
+  `## Vulnerabilidades verificadas` y `reports/auris_<ts>_claves.txt`
+- [x] Robustez del análisis: timeouts del fingerprinter, guardia de filas sin
+  BSSID, motivo "señal desconocida", aviso único del mapa OUI, notas de render
+- [x] Tests `tests/test_eval_chain.py` (14 casos). Suite: 160 passed, 14 skipped
+
 - [x] Ranking autónomo de objetivos (`--auto`, `--top`) y enriquecimiento Broadcom
 - [x] Tests de targeting (señal, WPS, cifrado, catálogo, top-N)
 
@@ -38,8 +46,13 @@ Seguimiento del estado de tareas con alto contraste visual.
 
 ## Tareas Pendientes / En Progreso
 
-- [ ] Cablear `pipeline.py` (PhaseProtocol) en `runner.py` y retirar el dispatcher legacy
-- [ ] Registrar `PSK_DEFAULTS` en `phases/__init__.py` (hoy solo en el camino legacy)
+- [ ] Cablear `pipeline.py` (PhaseProtocol) en `runner.py` — APLAZADO: la
+  evaluación secuencial `BROADCOM_EVAL` se implementó directamente en el
+  dispatcher de `runner.py`; fusionar el registry de `phases/` queda para una
+  iteración futura de refactor
+- [ ] Registrar `PSK_DEFAULTS` en `phases/__init__.py` — ya está en
+  `ATTACK_PHASES` del dispatcher legacy de `runner.py`; la tarea queda solo
+  para el registry de `phases/` cuando se cablee `pipeline.py`
 - [ ] Integrar `wids.py` a tramas reales del HAL y quitar `[SIMULATED]`
 - [ ] Evaluar backend PyUSB para `WirelessTransceiver`
 - [ ] Agregar CI Linux que corra `pytest` y `bash scripts/contextbase.sh status`

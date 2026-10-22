@@ -7,6 +7,31 @@ evolución del sistema. Formato basado en Keep a Changelog.
 
 ## Cambios Realizados
 
+### 2026-10-22 — Cadena de evaluación secuencial (`BROADCOM_EVAL`)
+
+- `decision_engine.py`: las rutas WPS (pin de clase y v1.0) prepónen la fase
+  `BROADCOM_EVAL`, que no forma parte de `ATTACK_PHASES`.
+- `runner.py`: `_phase_broadcom_eval` ejecuta el fingerprint vendorizado con
+  timeout y registra el veredicto. `PATCHED_HOSTAPD` marca `skipped` las fases
+  exclusivas de WPS (`WPS_ONLY_PHASES`) y deja correr la ruta PSK; un AP
+  vulnerable registra `zero_day_wps_broadcom`. Estado por objetivo
+  (`_broadcom_patched`, `_broadcom_eval`) reiniciado en cada target y volcado
+  como `broadcom_eval` en el JSON de sesión.
+- `report_writer.py`: secciones `## Contraseñas recuperadas` y
+  `## Vulnerabilidades verificadas`; notas de render al pie cuando se omite
+  una subsección por datos faltantes; `write_passwords_file()` genera
+  `reports/auris_<ts>_claves.txt` (`SSID;BSSID;tipo;clave`) solo con claves.
+- `cli.py`: guardia de filas sin BSSID en el bucle de objetivos y cableado del
+  TXT de claves tras el informe.
+- `broadcom.py`: timeouts 240 s (`fingerprint`), 180 s (`_run`) y 120 s (YARA);
+  `TimeoutExpired` → `BroadcomError` controlado, sin cuelgues del análisis.
+- `targeting.py`: RSSI ausente suma el motivo "señal desconocida"; `brand_of`
+  respeta primero la marca explícita de la fila.
+- `vendor_profiles.py`: aviso único `[WARN] mapa OUI no disponible` si el
+  archivo existe pero no parsea.
+- Tests: `tests/test_eval_chain.py` (14 casos nuevos). Suite: 160 passed,
+  14 skipped.
+
 ### 2026-10-22 — Selección autónoma de objetivos (`--auto`)
 
 - `src/auris/targeting.py`: ranking explicable (señal, WPS abierto/lockout,

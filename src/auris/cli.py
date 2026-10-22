@@ -12,6 +12,7 @@ Lo que hace internamente:
     -> Informe Markdown + JSON en reports/
     -> Restaurar wlan0
 """
+
 import os
 import csv
 import time
@@ -29,7 +30,11 @@ from .runner import run_single_target, extract_reusable_psk
 from .vendor_profiles import intel_for
 from .monitor import enable_monitor_mode, disable_monitor_mode
 from .scanner import scan_networks
-from .report_writer import generate_markdown_report, generate_json_report
+from .report_writer import (
+    generate_markdown_report,
+    generate_json_report,
+    write_passwords_file,
+)
 
 app = typer.Typer(
     help="AURIS v2 — Auditoría WiFi Secuencial (terminal)",
@@ -39,11 +44,14 @@ app = typer.Typer(
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _load_scope(scope_path: str) -> dict:
     """Carga y valida scope.yml. YAML corrupto = error limpio, nunca traceback."""
     import yaml  # intento dinámico; si no hay pyyaml, fallback manual
+
     try:
         import yaml as _yaml
+
         with open(scope_path) as f:
             return _yaml.safe_load(f) or {}
     except ImportError:
@@ -57,7 +65,9 @@ def _load_scope(scope_path: str) -> dict:
                     scope[k.strip()] = v.strip()
         return scope
     except Exception as e:
-        console.print(f"[red][ERR][/red] scope.yml corrupto ({e}) — revísalo con: python3 -c \"import yaml; yaml.safe_load(open('{scope_path}'))\"")
+        console.print(
+            f"[red][ERR][/red] scope.yml corrupto ({e}) — revísalo con: python3 -c \"import yaml; yaml.safe_load(open('{scope_path}'))\""
+        )
         raise typer.Exit(1)
 
 
@@ -91,65 +101,111 @@ def _mock_scan_targets(iface: str, duration: int) -> list[dict]:
     if shutil.which("wash"):
         console.print(f"  [dim]wash -i {iface} --scan ...[/dim]")
         import subprocess
+
         try:
             proc = subprocess.run(
                 ["wash", "-i", iface, "--scan"],
-                capture_output=True, text=True, timeout=duration
+                capture_output=True,
+                text=True,
+                timeout=duration,
             )
             lines = [l for l in proc.stdout.splitlines() if ":" in l and len(l) > 20]
             targets = []
             for line in lines[1:]:  # skip header
                 parts = line.split()
                 if len(parts) >= 5:
-                    targets.append({
-                        "bssid": parts[0], "ssid": parts[4] if len(parts) > 4 else "?",
-                        "channel": int(parts[1]) if parts[1].isdigit() else 6,
-                        "encryption": "WPA2", "wps_enabled": True,
-                        "wps_version": parts[3] if len(parts) > 3 else "?",
-                        "oui": parts[0][:8], "signal_strength": -60, "brand": "?",
-                    })
+                    targets.append(
+                        {
+                            "bssid": parts[0],
+                            "ssid": parts[4] if len(parts) > 4 else "?",
+                            "channel": int(parts[1]) if parts[1].isdigit() else 6,
+                            "encryption": "WPA2",
+                            "wps_enabled": True,
+                            "wps_version": parts[3] if len(parts) > 3 else "?",
+                            "oui": parts[0][:8],
+                            "signal_strength": -60,
+                            "brand": "?",
+                        }
+                    )
             if targets:
                 return targets
         except Exception:
             pass
 
     # Demo/fallback para laboratorio — flota del laboratorio (5 routers)
-    console.print("  [yellow]Modo demo — usando datos de laboratorio (no hay herramientas o iface)[/yellow]")
+    console.print(
+        "  [yellow]Modo demo — usando datos de laboratorio (no hay herramientas o iface)[/yellow]"
+    )
     return [
         {
-            "bssid": "00:1C:DF:AA:BB:CC", "ssid": "MOVISTAR_AB12",
-            "channel": 6, "encryption": "WPA2",
-            "wps_enabled": True, "wps_version": "1.0", "wps_locked": False,
-            "wpa3_supported": False, "dpp_supported": False,
-            "oui": "00:1C:DF", "signal_strength": -55, "brand": "Askey",
+            "bssid": "00:1C:DF:AA:BB:CC",
+            "ssid": "MOVISTAR_AB12",
+            "channel": 6,
+            "encryption": "WPA2",
+            "wps_enabled": True,
+            "wps_version": "1.0",
+            "wps_locked": False,
+            "wpa3_supported": False,
+            "dpp_supported": False,
+            "oui": "00:1C:DF",
+            "signal_strength": -55,
+            "brand": "Askey",
         },
         {
-            "bssid": "28:6C:07:11:22:33", "ssid": "MOVISTAR_PLUS_2",
-            "channel": 1, "encryption": "WPA2",
-            "wps_enabled": True, "wps_version": "2.0", "wps_locked": True,
-            "wpa3_supported": False, "dpp_supported": False,
-            "oui": "28:6C:07", "signal_strength": -62, "brand": "MitraStar",
+            "bssid": "28:6C:07:11:22:33",
+            "ssid": "MOVISTAR_PLUS_2",
+            "channel": 1,
+            "encryption": "WPA2",
+            "wps_enabled": True,
+            "wps_version": "2.0",
+            "wps_locked": True,
+            "wpa3_supported": False,
+            "dpp_supported": False,
+            "oui": "28:6C:07",
+            "signal_strength": -62,
+            "brand": "MitraStar",
         },
         {
-            "bssid": "9C:C7:A6:44:55:66", "ssid": "HUAWEI-5GHT",
-            "channel": 11, "encryption": "WPA2",
-            "wps_enabled": True, "wps_version": "2.0", "wps_locked": False,
-            "wpa3_supported": False, "dpp_supported": False,
-            "oui": "9C:C7:A6", "signal_strength": -58, "brand": "Huawei",
+            "bssid": "9C:C7:A6:44:55:66",
+            "ssid": "HUAWEI-5GHT",
+            "channel": 11,
+            "encryption": "WPA2",
+            "wps_enabled": True,
+            "wps_version": "2.0",
+            "wps_locked": False,
+            "wpa3_supported": False,
+            "dpp_supported": False,
+            "oui": "9C:C7:A6",
+            "signal_strength": -58,
+            "brand": "Huawei",
         },
         {
-            "bssid": "D4:CA:6D:DE:AD:BE", "ssid": "TP-Link_F845",
-            "channel": 3, "encryption": "WPA2",
-            "wps_enabled": False, "wps_version": None, "wps_locked": False,
-            "wpa3_supported": True, "dpp_supported": True,
-            "oui": "D4:CA:6D", "signal_strength": -48, "brand": "TP-Link",
+            "bssid": "D4:CA:6D:DE:AD:BE",
+            "ssid": "TP-Link_F845",
+            "channel": 3,
+            "encryption": "WPA2",
+            "wps_enabled": False,
+            "wps_version": None,
+            "wps_locked": False,
+            "wpa3_supported": True,
+            "dpp_supported": True,
+            "oui": "D4:CA:6D",
+            "signal_strength": -48,
+            "brand": "TP-Link",
         },
         {
-            "bssid": "02:0F:B5:77:88:99", "ssid": "WLAN_9XQ2",
-            "channel": 9, "encryption": "WPA",
-            "wps_enabled": True, "wps_version": "1.0", "wps_locked": False,
-            "wpa3_supported": False, "dpp_supported": False,
-            "oui": "02:0F:B5", "signal_strength": -71, "brand": "Unknown",
+            "bssid": "02:0F:B5:77:88:99",
+            "ssid": "WLAN_9XQ2",
+            "channel": 9,
+            "encryption": "WPA",
+            "wps_enabled": True,
+            "wps_version": "1.0",
+            "wps_locked": False,
+            "wpa3_supported": False,
+            "dpp_supported": False,
+            "oui": "02:0F:B5",
+            "signal_strength": -71,
+            "brand": "Unknown",
         },
     ]
 
@@ -161,7 +217,10 @@ def _build_profile(target: dict) -> Profile:
 
     # Resolución de marca: OUI verificado > escaneo > patrón SSID de flota
     from .vendor_profiles import resolve_brand
-    brand = resolve_brand(oui_raw, target.get("ssid", ""), target.get("brand", "Unknown"))
+
+    brand = resolve_brand(
+        oui_raw, target.get("ssid", ""), target.get("brand", "Unknown")
+    )
 
     # Heurísticas de clase de PIN por OUI conocido (formato normalizado sin ':')
     pin_class = "unknown"
@@ -183,6 +242,7 @@ def _build_profile(target: dict) -> Profile:
 
 # ─── Comandos ─────────────────────────────────────────────────────────────────
 
+
 @app.command()
 def doctor():
     """
@@ -190,6 +250,7 @@ def doctor():
     Ejecutar SIEMPRE antes de la primera auditoría.
     """
     from .doctor import run_doctor
+
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     ok = run_doctor(project_dir)
     raise typer.Exit(code=0 if ok else 1)
@@ -201,6 +262,7 @@ def db_init():
     Inicializa la base de datos SQLite y carga semillas (OUI, catálogo CWE).
     """
     from .db import init_db, Vendor
+
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     db_path = os.path.join(project_dir, "data", "auris.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -235,10 +297,13 @@ def verify_rockyou(
     Tarda ~20 s. Ejecutar en la máquina con internet antes de empaquetar el bundle.
     """
     from .wordlists import find_rockyou, deep_count, quick_check
+
     project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     path = find_rockyou(project_dir, wordlist)
     if not path:
-        console.print("[red][ERR][/red] rockyou.txt no encontrada (Kali: /usr/share/wordlists/, bundle, data/)")
+        console.print(
+            "[red][ERR][/red] rockyou.txt no encontrada (Kali: /usr/share/wordlists/, bundle, data/)"
+        )
         raise typer.Exit(1)
     console.print(f"  [dim]Rápido:[/dim] {quick_check(path)['msg']}")
     with console.status("[cyan]Contando líneas (14M, ~20 s)...[/cyan]"):
@@ -258,7 +323,12 @@ def hal_command():
     from rich.table import Table
     from .hal import detect_adapters, CHIPSET_REGISTRY
 
-    console.print(Rule("[bold cyan]HAL — Hardware Abstraction Layer (Wifite4)[/bold cyan]", style="cyan"))
+    console.print(
+        Rule(
+            "[bold cyan]HAL — Hardware Abstraction Layer (Wifite4)[/bold cyan]",
+            style="cyan",
+        )
+    )
 
     # 1. Adaptadores detectados
     adapters = detect_adapters()
@@ -286,10 +356,14 @@ def hal_command():
             )
         console.print(table_adapters)
     else:
-        console.print("  [dim]Sin adaptadores USB wireless detectados activamente.[/dim]")
+        console.print(
+            "  [dim]Sin adaptadores USB wireless detectados activamente.[/dim]"
+        )
 
     # 2. Catálogo de chipsets soportados
-    console.print(f"\n[bold]Catálogo de Chipsets Soportados ({len(CHIPSET_REGISTRY)} modelos):[/bold]")
+    console.print(
+        f"\n[bold]Catálogo de Chipsets Soportados ({len(CHIPSET_REGISTRY)} modelos):[/bold]"
+    )
     table_chipsets = Table(show_header=True, header_style="bold cyan")
     table_chipsets.add_column("USB ID", style="dim")
     table_chipsets.add_column("Chipset", style="bold")
@@ -324,8 +398,12 @@ def candidates_command(
     from rich.table import Table
     from .generator import generate_candidates
 
-    console.print(Rule(f"[bold cyan]Generador Heurístico — {ssid}[/bold cyan]", style="cyan"))
-    cset = generate_candidates(ssid=ssid, bssid=bssid, brand=brand, max_candidates=limit)
+    console.print(
+        Rule(f"[bold cyan]Generador Heurístico — {ssid}[/bold cyan]", style="cyan")
+    )
+    cset = generate_candidates(
+        ssid=ssid, bssid=bssid, brand=brand, max_candidates=limit
+    )
 
     table = Table(show_header=True, header_style="bold cyan")
     table.add_column("#", justify="right", style="dim")
@@ -338,7 +416,9 @@ def candidates_command(
 
     console.print(table)
     gen_time = cset.meta.get("generation_timestamp", "?")
-    console.print(f"\n  [dim]Total generados: {cset.total} | SSID: {cset.ssid} | Semillas: {gen_time}[/dim]")
+    console.print(
+        f"\n  [dim]Total generados: {cset.total} | SSID: {cset.ssid} | Semillas: {gen_time}[/dim]"
+    )
 
 
 @app.command(name="broadcom")
@@ -346,7 +426,9 @@ def broadcom_command(
     interface: Optional[str] = typer.Option(
         None, help="Interfaz YA en modo monitor (modo fingerprint)"
     ),
-    ssid: Optional[str] = typer.Option(None, help="SSID exacto del AP (modo fingerprint)"),
+    ssid: Optional[str] = typer.Option(
+        None, help="SSID exacto del AP (modo fingerprint)"
+    ),
     lookup_vendor: Optional[str] = typer.Option(
         None, "--lookup", help="Fabricante a consultar en el catálogo offline"
     ),
@@ -355,7 +437,9 @@ def broadcom_command(
         None, "--firmware", help="Archivo o directorio de firmware para YARA"
     ),
     debug_assoc: bool = typer.Option(
-        False, "--debug-assoc", help="Loguear códigos de autenticación/asociación 802.11"
+        False,
+        "--debug-assoc",
+        help="Loguear códigos de autenticación/asociación 802.11",
     ),
 ):
     """
@@ -390,10 +474,15 @@ def broadcom_command(
             console.print(f"[red][ERR][/red] {exc}")
             raise typer.Exit(1)
         console.print(
-            Rule(f"[bold cyan]Equipos Broadcom — {lookup_vendor}[/bold cyan]", style="cyan")
+            Rule(
+                f"[bold cyan]Equipos Broadcom — {lookup_vendor}[/bold cyan]",
+                style="cyan",
+            )
         )
         if not matches:
-            console.print("  [yellow][WARN][/yellow] Sin coincidencias en el catálogo offline.")
+            console.print(
+                "  [yellow][WARN][/yellow] Sin coincidencias en el catálogo offline."
+            )
             raise typer.Exit(0)
         table = Table(show_header=True, header_style="bold cyan")
         table.add_column("Estado")
@@ -424,10 +513,15 @@ def broadcom_command(
             console.print(f"[red][ERR][/red] {exc}")
             raise typer.Exit(1)
         console.print(
-            Rule("[bold cyan]Reglas YARA — Broadcom WPS Monitor[/bold cyan]", style="cyan")
+            Rule(
+                "[bold cyan]Reglas YARA — Broadcom WPS Monitor[/bold cyan]",
+                style="cyan",
+            )
         )
         if not matches:
-            console.print("  [green][OK][/green] Sin coincidencias en el firmware analizado.")
+            console.print(
+                "  [green][OK][/green] Sin coincidencias en el firmware analizado."
+            )
             raise typer.Exit(0)
         table = Table(show_header=True, header_style="bold cyan")
         table.add_column("Regla", style="bold")
@@ -473,21 +567,59 @@ def broadcom_command(
 
 @app.command(name="run-all")
 def run_all(
-    iface: str = typer.Option("wlan0", help="Interfaz WiFi (modo monitor) para Red Team"),
-    wids_iface: Optional[str] = typer.Option(None, help="Segunda interfaz para WIDS (Blue Team). Opcional."),
-    scan_duration: int = typer.Option(25, help="Segundos de escaneo inicial de redes (estilo wifite: 20-30s)"),
+    iface: str = typer.Option(
+        "wlan0", help="Interfaz WiFi (modo monitor) para Red Team"
+    ),
+    wids_iface: Optional[str] = typer.Option(
+        None, help="Segunda interfaz para WIDS (Blue Team). Opcional."
+    ),
+    scan_duration: int = typer.Option(
+        25, help="Segundos de escaneo inicial de redes (estilo wifite: 20-30s)"
+    ),
     scope_file: str = typer.Option("config/scope.yml", help="Archivo de scope RoE"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Mostrar path sin ejecutar fases aéreas"),
-    target_bssid: Optional[str] = typer.Option(None, help="Auditar solo este BSSID (omitir scan)"),
-    force_roe: bool = typer.Option(False, "--force-roe", help="Saltar dry_run_default del scope (firma RoE requerida)"),
-    allow_lan: bool = typer.Option(False, "--allow-lan", help="Permitir sondeo LAN del gateway (solo lectura, requiere lab_lan_gateway)"),
-    resume_last: bool = typer.Option(False, "--resume-last", help="Continuar la última sesión (omite BSSIDs ya completados)"),
-    resume_file: str = typer.Option("", help="Continuar una sesión concreta (data/sessions/sesion_<ts>.json)"),
-    select: bool = typer.Option(True, "--select/--no-select", help="Pausar tras el scan para marcar redes (estilo wifite). --no-select = todas automático."),
-    targets: str = typer.Option("", help="Selección no interactiva: '1,3-5,all' (para scripts/offline auto)"),
-    all_targets: bool = typer.Option(False, "--all", help="Auditar todas sin preguntar (atajo de --no-select)"),
-    auto: bool = typer.Option(False, "--auto", help="Elegir automáticamente los mejores objetivos (ranking offline)"),
-    top: int = typer.Option(0, "--top", help="Con --auto: auditar solo los N mejores (0 = todos)"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Mostrar path sin ejecutar fases aéreas"
+    ),
+    target_bssid: Optional[str] = typer.Option(
+        None, help="Auditar solo este BSSID (omitir scan)"
+    ),
+    force_roe: bool = typer.Option(
+        False,
+        "--force-roe",
+        help="Saltar dry_run_default del scope (firma RoE requerida)",
+    ),
+    allow_lan: bool = typer.Option(
+        False,
+        "--allow-lan",
+        help="Permitir sondeo LAN del gateway (solo lectura, requiere lab_lan_gateway)",
+    ),
+    resume_last: bool = typer.Option(
+        False,
+        "--resume-last",
+        help="Continuar la última sesión (omite BSSIDs ya completados)",
+    ),
+    resume_file: str = typer.Option(
+        "", help="Continuar una sesión concreta (data/sessions/sesion_<ts>.json)"
+    ),
+    select: bool = typer.Option(
+        True,
+        "--select/--no-select",
+        help="Pausar tras el scan para marcar redes (estilo wifite). --no-select = todas automático.",
+    ),
+    targets: str = typer.Option(
+        "", help="Selección no interactiva: '1,3-5,all' (para scripts/offline auto)"
+    ),
+    all_targets: bool = typer.Option(
+        False, "--all", help="Auditar todas sin preguntar (atajo de --no-select)"
+    ),
+    auto: bool = typer.Option(
+        False,
+        "--auto",
+        help="Elegir automáticamente los mejores objetivos (ranking offline)",
+    ),
+    top: int = typer.Option(
+        0, "--top", help="Con --auto: auditar solo los N mejores (0 = todos)"
+    ),
 ):
     """
     Automatización completa estilo wifite: escanea, deja marcar y audita en secuencia.
@@ -525,6 +657,7 @@ def run_all(
     # scan. La firma (dry_run/--force-roe/selección) se resuelve en fase B,
     # tras marcar objetivos — flujo wifite: no hay que saber BSSIDs antes.
     from .roe import enforce_scope, verify_mac_stable, RoEError
+
     try:
         roe_ctx = enforce_scope(scope, dry_run=True, force_roe=force_roe)
     except RoEError as e:
@@ -532,12 +665,15 @@ def run_all(
         raise typer.Exit(2)
     session_mac = roe_ctx.get("iface_mac")
     if roe_ctx.get("window_bypassed"):
-        console.print(f"  [bold red][RoE][/bold red] [red]{roe_ctx.get('window')}[/red]")
+        console.print(
+            f"  [bold red][RoE][/bold red] [red]{roe_ctx.get('window')}[/red]"
+        )
     else:
         console.print(f"  [green][RoE][/green] [dim]{roe_ctx.get('window')}[/dim]")
 
     # ── Sesión reanudable ────────────────────────────────────────────────────
     from .session import new_session, save_progress, load_session, latest_session
+
     resumed: Dict[str, dict] = {}
     rpath = resume_file or (latest_session(project_dir) if resume_last else None)
     if (resume_file or resume_last) and not rpath:
@@ -548,7 +684,9 @@ def run_all(
             for r in prev.get("completed", []):
                 r["resumed"] = True
                 resumed[(r.get("bssid") or "").upper()] = r
-            console.print(f"  [cyan][Resume][/cyan] {len(resumed)} APs recuperados de {rpath}")
+            console.print(
+                f"  [cyan][Resume][/cyan] {len(resumed)} APs recuperados de {rpath}"
+            )
     sess = new_session(project_dir)
     console.print(f"  [dim]Sesión: {sess['path']}[/dim]")
 
@@ -568,44 +706,73 @@ def run_all(
                 mon_iface = res  # type: ignore
             if mon_iface is None:
                 from .monitor import list_wireless_ifaces
+
                 hw = list_wireless_ifaces()
                 if not hw:
-                    console.print("  [yellow][WARN] Sin hardware wireless — modo demo (sin monitor).[/yellow]")
+                    console.print(
+                        "  [yellow][WARN] Sin hardware wireless — modo demo (sin monitor).[/yellow]"
+                    )
                     mon_iface = iface
                 else:
-                    console.print(f"  [red][ERR] Modo monitor falló con hardware presente — ver diagnóstico arriba.[/red]")
-                    console.print("  [dim]Abortando sin escanear un interfaz muerto. "
-                                  "Recupera con: sudo airmon-ng stop wlan0mon; "
-                                  "sudo systemctl restart NetworkManager[/dim]")
+                    console.print(
+                        f"  [red][ERR] Modo monitor falló con hardware presente — ver diagnóstico arriba.[/red]"
+                    )
+                    console.print(
+                        "  [dim]Abortando sin escanear un interfaz muerto. "
+                        "Recupera con: sudo airmon-ng stop wlan0mon; "
+                        "sudo systemctl restart NetworkManager[/dim]"
+                    )
                     raise typer.Exit(2)
         else:
             mon_iface = iface
-            console.print(f"  [dim][DRY RUN] Modo monitor omitido (iface: {iface})[/dim]")
+            console.print(
+                f"  [dim][DRY RUN] Modo monitor omitido (iface: {iface})[/dim]"
+            )
 
         scan_iface = mon_iface
 
         # ── PASO 2: Escanear redes ─────────────────────────────────────────────
-        console.print(Rule("[bold cyan]Paso 2/4 — Escaneo de Redes[/bold cyan]", style="cyan"))
+        console.print(
+            Rule("[bold cyan]Paso 2/4 — Escaneo de Redes[/bold cyan]", style="cyan")
+        )
 
         if target_bssid:
             console.print(f"  [dim]Target fijo: {target_bssid}[/dim]")
-            raw_targets = [{
-                "bssid": target_bssid, "ssid": "TARGET", "channel": 6,
-                "encryption": "WPA2", "wps_enabled": True, "wps_version": "1.0",
-                "wps_locked": False, "wpa3_supported": False, "dpp_supported": False,
-                "oui": target_bssid.replace(":", "")[:6], "signal_strength": -60,
-                "brand": "?", "clients": 0, "beacons": 0, "data_frames": 0,
-            }]
+            raw_targets = [
+                {
+                    "bssid": target_bssid,
+                    "ssid": "TARGET",
+                    "channel": 6,
+                    "encryption": "WPA2",
+                    "wps_enabled": True,
+                    "wps_version": "1.0",
+                    "wps_locked": False,
+                    "wpa3_supported": False,
+                    "dpp_supported": False,
+                    "oui": target_bssid.replace(":", "")[:6],
+                    "signal_strength": -60,
+                    "brand": "?",
+                    "clients": 0,
+                    "beacons": 0,
+                    "data_frames": 0,
+                }
+            ]
         else:
-            console.print(f"  Escaneando en [cyan]{scan_iface}[/cyan] durante [cyan]{scan_duration}s[/cyan]...")
+            console.print(
+                f"  Escaneando en [cyan]{scan_iface}[/cyan] durante [cyan]{scan_duration}s[/cyan]..."
+            )
             raw_targets = scan_networks(scan_iface, scan_duration)
 
         # Filtrar por scope (BSSID y SSID; modo lab solo avisa)
         raw_targets, dropped, lab_mode = _apply_scope_filter(raw_targets, scope)
         if lab_mode:
-            console.print("[yellow][SELECT][/yellow] modo wifite — sin lista blanca previa: TÚ autorizas marcando tras el scan.")
+            console.print(
+                "[yellow][SELECT][/yellow] modo wifite — sin lista blanca previa: TÚ autorizas marcando tras el scan."
+            )
         elif dropped:
-            console.print(f"  [dim]Scope: {dropped} red(es) fuera de lista blanca omitidas[/dim]")
+            console.print(
+                f"  [dim]Scope: {dropped} red(es) fuera de lista blanca omitidas[/dim]"
+            )
 
         print_targets_table(raw_targets)
 
@@ -619,9 +786,13 @@ def run_all(
         elif targets.strip():
             picked = parse_target_selection(targets, len(raw_targets))
             if not picked:
-                console.print(f"  [yellow][SELECT] '--targets {targets}' no matchea 1-{len(raw_targets)}. Abortando.[/yellow]")
+                console.print(
+                    f"  [yellow][SELECT] '--targets {targets}' no matchea 1-{len(raw_targets)}. Abortando.[/yellow]"
+                )
                 return
-            console.print(f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas vía --targets: {picked}")
+            console.print(
+                f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas vía --targets: {picked}"
+            )
             raw_targets = [raw_targets[i - 1] for i in picked]
             consent_explicit = True
         elif auto:
@@ -630,7 +801,10 @@ def run_all(
                 console.print("  [yellow][SELECT] ranking vacío. Abortando.[/yellow]")
                 return
             console.print(
-                Rule("[bold cyan]Selección automática — ranking[/bold cyan]", style="cyan")
+                Rule(
+                    "[bold cyan]Selección automática — ranking[/bold cyan]",
+                    style="cyan",
+                )
             )
             from rich.table import Table as _RankingTable
 
@@ -654,13 +828,19 @@ def run_all(
                 f"  [cyan][SELECT][/cyan] {len(raw_targets)} objetivo(s) elegidos por ranking"
             )
         elif all_targets or not select:
-            console.print(f"  [dim][SELECT] modo automático — {len(raw_targets)} redes (todas)[/dim]")
+            console.print(
+                f"  [dim][SELECT] modo automático — {len(raw_targets)} redes (todas)[/dim]"
+            )
         else:
             picked, consent_explicit = prompt_target_selection(len(raw_targets))
             if not picked:
-                console.print("  [yellow][SELECT] sin objetivos marcados. Abortando sin tocar el aire.[/yellow]")
+                console.print(
+                    "  [yellow][SELECT] sin objetivos marcados. Abortando sin tocar el aire.[/yellow]"
+                )
                 return
-            console.print(f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas: {picked}")
+            console.print(
+                f"  [cyan][SELECT][/cyan] {len(picked)}/{len(raw_targets)} marcadas: {picked}"
+            )
             raw_targets = [raw_targets[i - 1] for i in picked]
 
         # ── Puerta RoE fase B: firma de sesión ──────────────────────────────
@@ -670,49 +850,71 @@ def run_all(
         if not dry_run and not force_roe:
             if consent_explicit:
                 try:
-                    roe_ctx = enforce_scope(scope, dry_run=False,
-                                            force_roe=False,
-                                            selection_consent=True)
+                    roe_ctx = enforce_scope(
+                        scope, dry_run=False, force_roe=False, selection_consent=True
+                    )
                 except RoEError as e:
                     console.print(f"[red][RoE BLOQUEO][/red] {e}")
                     raise typer.Exit(2)
                 session_mac = roe_ctx.get("iface_mac")
-                console.print(f"  [green][RoE][/green] [dim]firma de sesión: {len(raw_targets)} objetivo(s) marcado(s) explícitamente[/dim]")
+                console.print(
+                    f"  [green][RoE][/green] [dim]firma de sesión: {len(raw_targets)} objetivo(s) marcado(s) explícitamente[/dim]"
+                )
             else:
-                console.print("[red][RoE BLOQUEO][/red] RoE: auditoría automática total sin firma — "
-                              "marca objetivos explícitos (prompt/--targets/--target-bssid) o usa --force-roe")
+                console.print(
+                    "[red][RoE BLOQUEO][/red] RoE: auditoría automática total sin firma — "
+                    "marca objetivos explícitos (prompt/--targets/--target-bssid) o usa --force-roe"
+                )
                 raise typer.Exit(2)
 
-        console.print(f"\n  [bold]{len(raw_targets)}[/bold] redes a auditar. Iniciando secuencia...\n")
+        console.print(
+            f"\n  [bold]{len(raw_targets)}[/bold] redes a auditar. Iniciando secuencia...\n"
+        )
         time.sleep(1)
 
         # ── PASO 3: Ejecución secuencial — una red a la vez ───────────────────
-        console.print(Rule("[bold cyan]Paso 3/4 — Ejecución Secuencial[/bold cyan]", style="cyan"))
+        console.print(
+            Rule("[bold cyan]Paso 3/4 — Ejecución Secuencial[/bold cyan]", style="cyan")
+        )
         all_results = []
-        session_keys: Dict[str, str] = {}  # {ssid: psk} para reutilización entre APs hermanos
+        session_keys: Dict[
+            str, str
+        ] = {}  # {ssid: psk} para reutilización entre APs hermanos
 
         for idx, raw in enumerate(raw_targets, 1):
-            console.print(Rule(
-                f"[bold]Red {idx}/{len(raw_targets)}[/bold]  "
-                f"[cyan]{raw['ssid']}[/cyan]  [dim]({raw['bssid']})[/dim]",
-                style="blue",
-            ))
+            if not raw.get("bssid"):
+                console.print("  [yellow][SCAN] fila sin BSSID omitida[/yellow]")
+                continue
+            console.print(
+                Rule(
+                    f"[bold]Red {idx}/{len(raw_targets)}[/bold]  "
+                    f"[cyan]{raw['ssid']}[/cyan]  [dim]({raw['bssid']})[/dim]",
+                    style="blue",
+                )
+            )
 
             target = TargetInfo(
-                bssid=raw["bssid"], ssid=raw["ssid"], channel=raw["channel"],
+                bssid=raw["bssid"],
+                ssid=raw["ssid"],
+                channel=raw["channel"],
                 encryption=raw["encryption"],
                 wps_enabled=raw.get("wps_enabled", False),
                 wps_version=raw.get("wps_version"),
                 wps_locked=raw.get("wps_locked", False),
-                oui=raw["oui"], signal_strength=raw["signal_strength"],
+                oui=raw["oui"],
+                signal_strength=raw["signal_strength"],
                 wpa3_supported=raw.get("wpa3_supported", False),
                 dpp_supported=raw.get("dpp_supported", False),
             )
             if raw["bssid"].upper() in resumed:
-                console.print(f"  [cyan]↩ reanudado[/cyan] [dim]resultado previo reincorporado sin re-auditar[/dim]")
+                console.print(
+                    f"  [cyan]↩ reanudado[/cyan] [dim]resultado previo reincorporado sin re-auditar[/dim]"
+                )
                 all_results.append(resumed[raw["bssid"].upper()])
                 # Re-alimentar claves de sesión para la reutilización entre hermanos
-                psk0 = extract_reusable_psk(resumed[raw["bssid"].upper()].get("recovered_key"))
+                psk0 = extract_reusable_psk(
+                    resumed[raw["bssid"].upper()].get("recovered_key")
+                )
                 if psk0:
                     session_keys[raw["ssid"]] = psk0
                 continue
@@ -726,8 +928,9 @@ def run_all(
             )
 
             if dry_run:
-                path = decide_path(target, profile,
-                                   wids_enabled=wids_iface is not None, dry_run=True)
+                path = decide_path(
+                    target, profile, wids_enabled=wids_iface is not None, dry_run=True
+                )
                 console.print(f"  [dim]DRY RUN — path: {' -> '.join(path)}[/dim]")
                 raw["path"] = path
                 raw["result"] = "dry_run"
@@ -739,7 +942,8 @@ def run_all(
                 raw["lan_surface"] = None
                 raw["dpp_assessment"] = None
                 raw["vendor_intel"] = intel_for(
-                    ssid=raw.get("ssid", ""), bssid=raw.get("bssid", ""),
+                    ssid=raw.get("ssid", ""),
+                    bssid=raw.get("bssid", ""),
                     brand=profile.brand,
                 )
                 raw["broadcom_catalog"] = affected_models(profile.brand)
@@ -748,18 +952,23 @@ def run_all(
                 continue
 
             result = run_single_target(
-                target=target, profile=profile,
-                iface=scan_iface, wids_iface=wids_iface, scope=scope,
-                known_keys=session_keys, allow_lan=allow_lan,
+                target=target,
+                profile=profile,
+                iface=scan_iface,
+                wids_iface=wids_iface,
+                scope=scope,
+                known_keys=session_keys,
+                allow_lan=allow_lan,
             )
-            result["ssid"]          = raw["ssid"]
-            result["brand"]         = raw.get("brand", "?")
-            result["wps_enabled"]   = raw.get("wps_enabled", False)
-            result["wps_locked"]    = raw.get("wps_locked", False)
-            result["wpa3_supported"]= raw.get("wpa3_supported", False)
-            result["encryption"]    = raw.get("encryption", "?")
-            result["vendor_intel"]  = intel_for(
-                ssid=raw.get("ssid", ""), bssid=raw.get("bssid", ""),
+            result["ssid"] = raw["ssid"]
+            result["brand"] = raw.get("brand", "?")
+            result["wps_enabled"] = raw.get("wps_enabled", False)
+            result["wps_locked"] = raw.get("wps_locked", False)
+            result["wpa3_supported"] = raw.get("wpa3_supported", False)
+            result["encryption"] = raw.get("encryption", "?")
+            result["vendor_intel"] = intel_for(
+                ssid=raw.get("ssid", ""),
+                bssid=raw.get("bssid", ""),
                 brand=profile.brand,
             )
             result["broadcom_catalog"] = affected_models(profile.brand)
@@ -771,11 +980,15 @@ def run_all(
             if psk:
                 session_keys[raw["ssid"]] = psk
 
-            console.print(f"\n  [dim]Completada en {result.get('elapsed_sec', '?')}s[/dim]\n")
+            console.print(
+                f"\n  [dim]Completada en {result.get('elapsed_sec', '?')}s[/dim]\n"
+            )
             time.sleep(0.5)
 
         # ── PASO 4: Generar informes ───────────────────────────────────────────
-        console.print(Rule("[bold cyan]Paso 4/4 — Generando Informes[/bold cyan]", style="cyan"))
+        console.print(
+            Rule("[bold cyan]Paso 4/4 — Generando Informes[/bold cyan]", style="cyan")
+        )
 
         print_summary_table(all_results)
 
@@ -784,6 +997,7 @@ def run_all(
         os.makedirs(reports_dir, exist_ok=True)
 
         from .session import _unique_path as _uniq_report
+
         try:
             json_path = _uniq_report(os.path.join(reports_dir, f"auris_{ts}.json"))
             generate_json_report(all_results, scope, json_path)
@@ -792,8 +1006,17 @@ def run_all(
             md_path = _uniq_report(os.path.join(reports_dir, f"auris_{ts}_informe.md"))
             generate_markdown_report(all_results, scope, md_path)
             console.print(f"  [green][OK][/green] Informe:  [cyan]{md_path}[/cyan]")
+
+            pw_path = _uniq_report(os.path.join(reports_dir, f"auris_{ts}_claves.txt"))
+            pw_count = write_passwords_file(all_results, pw_path)
+            if pw_count:
+                console.print(
+                    f"  [green][OK][/green] Contrasenas: [cyan]{pw_path}[/cyan] ({pw_count} claves)"
+                )
         except OSError as e:
-            console.print(f"[red][ERR][/red] No se pudieron escribir informes ({e}) — ¿disco lleno o solo lectura?")
+            console.print(
+                f"[red][ERR][/red] No se pudieron escribir informes ({e}) — ¿disco lleno o solo lectura?"
+            )
             raise typer.Exit(1)
 
         console.print(f"\n  [bold]Para leer el informe:[/bold]")
@@ -801,7 +1024,9 @@ def run_all(
 
         # ── Cierre RoE: verificar MAC estable si el scope lo exige ─────────────
         if scope.get("forbid_mac_rotation", False):
-            mac_ok, mac_msg = verify_mac_stable(scope.get("iface_red_team", iface), session_mac)
+            mac_ok, mac_msg = verify_mac_stable(
+                scope.get("iface_red_team", iface), session_mac
+            )
             style = "green" if mac_ok else "red"
             console.print(f"  [{style}][RoE][/{style}] {mac_msg}")
             if not mac_ok:
@@ -814,10 +1039,10 @@ def run_all(
             console.print(Rule("Restaurando interfaz", style="dim"))
             # Si el monitor nunca se creó, mon_iface será el original o None;
             # disable se encarga de ser idempotente y de verificar NM.
-            disable_monitor_mode(mon_iface or iface, original_iface=iface,
-                                 ensure_nm=True)
+            disable_monitor_mode(
+                mon_iface or iface, original_iface=iface, ensure_nm=True
+            )
 
 
 if __name__ == "__main__":
     app()
-

@@ -132,8 +132,16 @@ def _interpreter_command(arguments: Sequence[str]) -> List[str]:
     raise BroadcomError("el fingerprinter requiere Python 3.11+ o uv")
 
 
-def _run(command: Sequence[str], cwd: str):
-    return subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+def _run(command: Sequence[str], cwd: str, timeout: float = 180.0):
+    try:
+        return subprocess.run(
+            command, cwd=cwd, capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise BroadcomError(
+            "Evaluacion Broadcom supero el tiempo (%s s). Revisa la interfaz y el reporte."
+            % timeout
+        ) from exc
 
 
 def _report_field(stdout: str, name: str) -> Optional[str]:
@@ -152,6 +160,7 @@ def fingerprint(
     debug_assoc: bool = False,
     cwd: Optional[str] = None,
     runner: Optional[Callable[[Sequence[str], str], object]] = None,
+    timeout: float = 240.0,
 ) -> FingerprintRun:
     """
     Ejecuta el fingerprinter vendorizado y devuelve el assessment parseado.
@@ -171,7 +180,11 @@ def fingerprint(
     if debug_assoc:
         arguments.append("--debug-assoc")
 
-    process = (runner or _run)(_interpreter_command(arguments), workdir)
+    command = _interpreter_command(arguments)
+    if runner is not None:
+        process = runner(command, workdir)
+    else:
+        process = _run(command, workdir, timeout)
     stdout = getattr(process, "stdout", "") or ""
     stderr = getattr(process, "stderr", "") or ""
     returncode = int(getattr(process, "returncode", 2))
@@ -247,11 +260,15 @@ def scan_firmware(target: str) -> List[YaraMatch]:
     yara = shutil.which("yara")
     if not yara:
         raise BroadcomError("yara no instalado (sudo apt install yara)")
-    process = subprocess.run(
-        [yara, "-w", "-r", YARA_RULES, target],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        process = subprocess.run(
+            [yara, "-w", "-r", YARA_RULES, target],
+            capture_output=True,
+            text=True,
+            timeout=120.0,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise BroadcomError("Escaneo YARA supero el tiempo (120 s).") from exc
     if process.returncode != 0:
         raise BroadcomError(
             f"yara falló (rc={process.returncode}): {_tail(process.stderr)}"

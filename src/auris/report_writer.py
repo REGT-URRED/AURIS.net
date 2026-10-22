@@ -18,21 +18,89 @@ from typing import List, Dict, Any, Optional
 
 # ── Mapeo MITRE ATT&CK + D3FEND ───────────────────────────────────────────────
 MITRE_ATTACK = {
-    "CAPTURE_HANDSHAKE":      {"id": "T1557.002", "name": "ARP Cache Poisoning / Handshake Capture",  "tactic": "Collection"},
-    "CAPTURE_PMKID":          {"id": "T1040",     "name": "Network Sniffing (PMKID)",                  "tactic": "Credential Access"},
-    "WPS_CLASS":              {"id": "T1110.001", "name": "Brute Force: Password Guessing (WPS PIN)",  "tactic": "Credential Access"},
-    "WPS_PIXIE":              {"id": "T1110.002", "name": "Brute Force: Password Cracking (Pixie Dust)","tactic": "Credential Access"},
-    "PSK_DEFAULTS":           {"id": "T1110.002", "name": "Brute Force: Password Cracking (Top-20 defaults)", "tactic": "Credential Access"},
-    "PSK_SSID_LOGIC":         {"id": "T1110.002", "name": "Brute Force: Password Cracking (Logic WL)", "tactic": "Credential Access"},
-    "PSK_ROCKYOU":            {"id": "T1110.002", "name": "Brute Force: Password Cracking (Dictionary)","tactic": "Credential Access"},
-    "CLASSIFY_WEAK_CRYPTO":   {"id": "T1600",     "name": "Weaken Encryption (WEP/Open)",              "tactic": "Defense Evasion"},
-    "EOL_GOVERNANCE":         {"id": "T1195",     "name": "Supply Chain Compromise (Firmware)",        "tactic": "Initial Access"},
-    "RESILIENCE_TEST":        {"id": "T1499",     "name": "Endpoint Denial of Service (Deauth)",       "tactic": "Impact"},
-    "DETECT_WPS_LOCKOUT":     {"id": "D3-WSAA",   "name": "Wireless Security Audit (Lockout Detect)",  "tactic": "Detect", "type": "D3FEND"},
-    "DETECT_WPA3_SAE":        {"id": "D3-NTA",    "name": "Network Traffic Analysis (WPA3 SAE Detect)","tactic": "Detect", "type": "D3FEND"},
-    "AUDIT_DPP_VULNERABILITIES": {"id": "D3-PMAD","name": "Protocol Metadata Anomaly Detection (DPP)", "tactic": "Detect", "type": "D3FEND"},
-    "AUDIT_LAN_SURFACE":   {"id": "T1046",     "name": "Network Service Discovery (Mgmt Surface)", "tactic": "Discovery"},
-    "VALIDATE_COUNTERMEASURE": {"id": "T1595.002", "name": "Active Scanning: Vulnerability Scanning (Control Re-check)", "tactic": "Reconnaissance"},
+    "CAPTURE_HANDSHAKE": {
+        "id": "T1557.002",
+        "name": "ARP Cache Poisoning / Handshake Capture",
+        "tactic": "Collection",
+    },
+    "CAPTURE_PMKID": {
+        "id": "T1040",
+        "name": "Network Sniffing (PMKID)",
+        "tactic": "Credential Access",
+    },
+    "WPS_CLASS": {
+        "id": "T1110.001",
+        "name": "Brute Force: Password Guessing (WPS PIN)",
+        "tactic": "Credential Access",
+    },
+    "WPS_PIXIE": {
+        "id": "T1110.002",
+        "name": "Brute Force: Password Cracking (Pixie Dust)",
+        "tactic": "Credential Access",
+    },
+    "PSK_DEFAULTS": {
+        "id": "T1110.002",
+        "name": "Brute Force: Password Cracking (Top-20 defaults)",
+        "tactic": "Credential Access",
+    },
+    "PSK_SSID_LOGIC": {
+        "id": "T1110.002",
+        "name": "Brute Force: Password Cracking (Logic WL)",
+        "tactic": "Credential Access",
+    },
+    "PSK_ROCKYOU": {
+        "id": "T1110.002",
+        "name": "Brute Force: Password Cracking (Dictionary)",
+        "tactic": "Credential Access",
+    },
+    "CLASSIFY_WEAK_CRYPTO": {
+        "id": "T1600",
+        "name": "Weaken Encryption (WEP/Open)",
+        "tactic": "Defense Evasion",
+    },
+    "EOL_GOVERNANCE": {
+        "id": "T1195",
+        "name": "Supply Chain Compromise (Firmware)",
+        "tactic": "Initial Access",
+    },
+    "RESILIENCE_TEST": {
+        "id": "T1499",
+        "name": "Endpoint Denial of Service (Deauth)",
+        "tactic": "Impact",
+    },
+    "DETECT_WPS_LOCKOUT": {
+        "id": "D3-WSAA",
+        "name": "Wireless Security Audit (Lockout Detect)",
+        "tactic": "Detect",
+        "type": "D3FEND",
+    },
+    "DETECT_WPA3_SAE": {
+        "id": "D3-NTA",
+        "name": "Network Traffic Analysis (WPA3 SAE Detect)",
+        "tactic": "Detect",
+        "type": "D3FEND",
+    },
+    "AUDIT_DPP_VULNERABILITIES": {
+        "id": "D3-PMAD",
+        "name": "Protocol Metadata Anomaly Detection (DPP)",
+        "tactic": "Detect",
+        "type": "D3FEND",
+    },
+    "AUDIT_LAN_SURFACE": {
+        "id": "T1046",
+        "name": "Network Service Discovery (Mgmt Surface)",
+        "tactic": "Discovery",
+    },
+    "VALIDATE_COUNTERMEASURE": {
+        "id": "T1595.002",
+        "name": "Active Scanning: Vulnerability Scanning (Control Re-check)",
+        "tactic": "Reconnaissance",
+    },
+    "BROADCOM_EVAL": {
+        "id": "T1592.003",
+        "name": "Gather Victim Host Information: Firmware (Broadcom eval)",
+        "tactic": "Reconnaissance",
+    },
 }
 
 # Marcadores de pipeline, no actividades: excluidos de la cobertura MITRE.
@@ -41,10 +109,10 @@ TERMINAL_PHASES = {"REPORT", "START_WIDS_MONITORING"}
 # ── Hallazgos por tipo de resultado ───────────────────────────────────────────
 FINDINGS_TEMPLATES = {
     "cracked": {
-        "severity":    "CRITICAL",
-        "cvss":        "9.8",
-        "cwe":         "CWE-330 (Uso de Valores Predecibles en PSK)",
-        "headline":    "Credencial WiFi comprometida en auditoría controlada",
+        "severity": "CRITICAL",
+        "cvss": "9.8",
+        "cwe": "CWE-330 (Uso de Valores Predecibles en PSK)",
+        "headline": "Credencial WiFi comprometida en auditoría controlada",
         "description": (
             "La clave PSK del AP fue obtenida durante el proceso de auditoría. "
             "Esto demuestra que la contraseña configurada en el dispositivo no cumple "
@@ -69,85 +137,85 @@ FINDINGS_TEMPLATES = {
         ),
     },
     "class_confirmed": {
-        "severity":    "HIGH",
-        "cvss":        "7.5",
-        "cwe":         "CWE-259 (PIN WPS con clase predecible)",
-        "headline":    "PIN WPS con clase o familia predecible confirmada",
+        "severity": "HIGH",
+        "cvss": "7.5",
+        "cwe": "CWE-259 (PIN WPS con clase predecible)",
+        "headline": "PIN WPS con clase o familia predecible confirmada",
         "description": (
             "El PIN WPS del dispositivo pertenece a una familia de valores conocida o predecible. "
             "Esto significa que el espacio de búsqueda efectivo es significativamente menor que "
             "el teórico (10^7), haciendo viable un ataque de fuerza bruta dirigido."
         ),
-        "recommendation_user":  "Desactivar WPS en el panel de administración del router.",
-        "recommendation_isp":   "Deshabilitar WPS vía TR-069/CWMP en el parque instalado. Notificar al OEM.",
-        "recommendation_oem":   "Generar PINs WPS únicos y criptográficamente aleatorios por unidad. Eliminar familias de PINs.",
+        "recommendation_user": "Desactivar WPS en el panel de administración del router.",
+        "recommendation_isp": "Deshabilitar WPS vía TR-069/CWMP en el parque instalado. Notificar al OEM.",
+        "recommendation_oem": "Generar PINs WPS únicos y criptográficamente aleatorios por unidad. Eliminar familias de PINs.",
     },
     "locked": {
-        "severity":    "INFO",
-        "cvss":        "0.0",
-        "cwe":         "N/A",
-        "headline":    "Mecanismo de bloqueo WPS activo (mitigación efectiva detectada)",
+        "severity": "INFO",
+        "cvss": "0.0",
+        "cwe": "N/A",
+        "headline": "Mecanismo de bloqueo WPS activo (mitigación efectiva detectada)",
         "description": (
             "El AP tiene activo un mecanismo de bloqueo WPS (Lockout). "
             "Este es un control defensivo efectivo que mitiga los ataques de fuerza bruta. "
             "El WPS sigue estando habilitado (superficie de ataque presente), pero la "
             "explotación activa está mitigada."
         ),
-        "recommendation_user":  "El lockout está activo. Para mayor seguridad, deshabilitar WPS completamente.",
-        "recommendation_isp":   "Confirmar que el lockout está habilitado en todo el parque. Evaluar deshabilitar WPS.",
-        "recommendation_oem":   "Habilitar lockout WPS por defecto en firmware. Considerar eliminar WPS PIN.",
+        "recommendation_user": "El lockout está activo. Para mayor seguridad, deshabilitar WPS completamente.",
+        "recommendation_isp": "Confirmar que el lockout está habilitado en todo el parque. Evaluar deshabilitar WPS.",
+        "recommendation_oem": "Habilitar lockout WPS por defecto en firmware. Considerar eliminar WPS PIN.",
     },
     "exhausted": {
-        "severity":    "LOW",
-        "cvss":        "2.0",
-        "cwe":         "N/A",
-        "headline":    "PSK resistente a ataque de diccionario estándar",
+        "severity": "LOW",
+        "cvss": "2.0",
+        "cwe": "N/A",
+        "headline": "PSK resistente a ataque de diccionario estándar",
         "description": (
             "La contraseña WiFi no fue encontrada en los diccionarios utilizados. "
             "Esto sugiere una PSK de mayor entropía. Sin embargo, el AP sigue siendo "
             "susceptible a ataques con diccionarios especializados o fuerza bruta dirigida."
         ),
-        "recommendation_user":  "Contraseña actual parece robusta. Mantener y revisar periódicamente.",
-        "recommendation_isp":   "Documentar como caso positivo en la auditoría del parque instalado.",
-        "recommendation_oem":   "Mantener la práctica de PSKs de alta entropía en nuevos modelos.",
+        "recommendation_user": "Contraseña actual parece robusta. Mantener y revisar periódicamente.",
+        "recommendation_isp": "Documentar como caso positivo en la auditoría del parque instalado.",
+        "recommendation_oem": "Mantener la práctica de PSKs de alta entropía en nuevos modelos.",
     },
     "eol_confirmed": {
-        "severity":    "HIGH",
-        "cvss":        "7.2",
-        "cwe":         "CWE-1104 (Firmware EoL no distribuido por ISP)",
-        "headline":    "Dispositivo con firmware EOL o sin actualización del ISP",
+        "severity": "HIGH",
+        "cvss": "7.2",
+        "cwe": "CWE-1104 (Firmware EoL no distribuido por ISP)",
+        "headline": "Dispositivo con firmware EOL o sin actualización del ISP",
         "description": (
             "El OEM ha publicado actualizaciones de firmware que corrigen vulnerabilidades conocidas, "
             "pero el ISP no ha distribuido dichas actualizaciones al parque instalado. "
             "El dispositivo permanece expuesto a vulnerabilidades ya parchadas."
         ),
-        "recommendation_user":  "Contactar al ISP para solicitar actualización. Como mitigación: deshabilitar WPS y cambiar PSK.",
-        "recommendation_isp":   "Establecer un SLA de distribución de firmware. Implementar push automático vía TR-069.",
-        "recommendation_oem":   "Notificar proactivamente al ISP de actualizaciones críticas. Mantener canal de divulgación.",
+        "recommendation_user": "Contactar al ISP para solicitar actualización. Como mitigación: deshabilitar WPS y cambiar PSK.",
+        "recommendation_isp": "Establecer un SLA de distribución de firmware. Implementar push automático vía TR-069.",
+        "recommendation_oem": "Notificar proactivamente al ISP de actualizaciones críticas. Mantener canal de divulgación.",
     },
     "done": {
-        "severity":    "INFO",
-        "cvss":        "0.0",
-        "cwe":         "N/A",
-        "headline":    "Fase de análisis completada sin hallazgos activos",
+        "severity": "INFO",
+        "cvss": "0.0",
+        "cwe": "N/A",
+        "headline": "Fase de análisis completada sin hallazgos activos",
         "description": "La fase fue completada sin detectar vulnerabilidades explotables.",
-        "recommendation_user":  "Sin acción requerida.",
-        "recommendation_isp":   "Sin acción requerida.",
-        "recommendation_oem":   "Sin acción requerida.",
+        "recommendation_user": "Sin acción requerida.",
+        "recommendation_isp": "Sin acción requerida.",
+        "recommendation_oem": "Sin acción requerida.",
     },
     "not_found": {
-        "severity":    "LOW",
-        "cvss":        "0.0",
-        "cwe":         "N/A",
-        "headline":    "Sin vulnerabilidades explotables en los vectores analizados",
+        "severity": "LOW",
+        "cvss": "0.0",
+        "cwe": "N/A",
+        "headline": "Sin vulnerabilidades explotables en los vectores analizados",
         "description": (
             "Los vectores evaluados (p. ej. WPA3-SAE, DPP) no presentaron "
             "fallas explotables con las pruebas ejecutadas. La superficie "
             "permanece sujeta a revisión ante nuevos firmwares o diccionarios."
         ),
-        "recommendation_user":  "Mantener firmware actualizado y contraseña robusta.",
-        "recommendation_isp":   "Documentar como caso sin hallazgos en la auditoría del parque instalado.",
-        "recommendation_oem":   "Mantener el nivel de hardening actual en nuevos firmwares.",
+        "recommendation_user": "Mantener firmware actualizado y contraseña robusta.",
+        "recommendation_isp": "Documentar como caso sin hallazgos en la auditoría del parque instalado.",
+        "recommendation_oem": "Mantener el nivel de hardening actual en nuevos firmwares.",
     },
 }
 
@@ -155,12 +223,68 @@ FINDINGS_TEMPLATES = {
 def _severity_badge(sev: str) -> str:
     badges = {
         "CRITICAL": "🔴 CRITICAL",
-        "HIGH":     "🟠 HIGH",
-        "MEDIUM":   "🟡 MEDIUM",
-        "LOW":      "🟢 LOW",
-        "INFO":     "🔵 INFO",
+        "HIGH": "🟠 HIGH",
+        "MEDIUM": "🟡 MEDIUM",
+        "LOW": "🟢 LOW",
+        "INFO": "🔵 INFO",
     }
     return badges.get(sev, sev)
+
+
+# ── Mapeo key_type → método humano (los prefijos son los type_val reales) ─────
+CREDENTIAL_METHODS = {
+    "WPS Pixie Dust": "WPS Pixie Dust",
+    "WPS PIN (Clase conocida)": "PIN por clase",
+    "WPA2-PSK (Top-20 defaults": "Contraseñas por defecto",
+    "WPA2-PSK (Lógica SSID": "Análisis lógica SSID",
+    "WPA2-PSK (Diccionario": "Diccionario",
+}
+
+
+def _credential_method(key_type: Optional[str]) -> str:
+    """Resuelve el método humano a partir del type_val real del handler."""
+    k = key_type or "WPA-PSK"
+    return next(
+        (name for prefix, name in CREDENTIAL_METHODS.items() if k.startswith(prefix)),
+        k,
+    )
+
+
+def _collect_credentials(session_results: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """Filas con clave recuperada: {ssid, bssid, key, tipo, metodo}."""
+    creds: List[Dict[str, str]] = []
+    for r in session_results:
+        key = r.get("recovered_key")
+        if not key:
+            continue
+        creds.append(
+            {
+                "ssid": r.get("ssid", "?"),
+                "bssid": r.get("bssid", "?"),
+                "key": key,
+                "tipo": r.get("key_type") or "WPA-PSK",
+                "metodo": _credential_method(r.get("key_type")),
+            }
+        )
+    return creds
+
+
+def _verified_vulnerabilities(result: Dict[str, Any]) -> List[str]:
+    """Bullets deterministas de vulnerabilidades verificadas para un AP."""
+    out: List[str] = []
+    be = result.get("broadcom_eval") or {}
+    if isinstance(be, dict):
+        if be.get("assessment") == "PATCHED_HOSTAPD":
+            out.append("hostapd parcheado (mitigado)")
+        elif be.get("assessment"):
+            out.append("Zero-day BRCM EAP fragment reassembly (wps_monitor)")
+    if result.get("recovered_key"):
+        out.append(f"Clave recuperada via {_credential_method(result.get('key_type'))}")
+    if result.get("wps_locked"):
+        out.append("WPS bloqueado")
+    if result.get("wpa3_supported"):
+        out.append("WPA3 (no compatible con WPS)")
+    return out
 
 
 def generate_markdown_report(
@@ -173,13 +297,17 @@ def generate_markdown_report(
     """
     now = datetime.now()
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-    date_str  = now.strftime("%Y-%m-%d")
+    date_str = now.strftime("%Y-%m-%d")
 
     # Estadísticas globales
     total = len(session_results)
     critical = sum(1 for r in session_results if r.get("result") in ("cracked",))
-    high     = sum(1 for r in session_results if r.get("result") in ("class_confirmed", "eol_confirmed"))
-    low      = sum(1 for r in session_results if r.get("result") in ("exhausted", "locked"))
+    high = sum(
+        1
+        for r in session_results
+        if r.get("result") in ("class_confirmed", "eol_confirmed")
+    )
+    low = sum(1 for r in session_results if r.get("result") in ("exhausted", "locked"))
     total_alerts = sum(r.get("wids_alerts", 0) for r in session_results)
     recovered_creds = [r for r in session_results if r.get("recovered_key")]
 
@@ -270,6 +398,42 @@ def generate_markdown_report(
             "",
         ]
 
+    # ── Tabla breve de credenciales (mismo dato, forma compacta) ───────────────
+    creds = _collect_credentials(session_results)
+    lines += ["## Contraseñas recuperadas", ""]
+    if creds:
+        lines += [
+            "| SSID | BSSID | Tipo | Metodo | Clave |",
+            "|---|---|---|---|---|",
+        ]
+        for c in creds:
+            lines.append(
+                f"| {c['ssid']} | `{c['bssid']}` | {c['tipo']} | {c['metodo']} | **`{c['key']}`** |"
+            )
+        # Dispositivos auditados sin clave: nota explícita por fila
+        cred_bsids = {c["bssid"] for c in creds}
+        for r in session_results:
+            if str(r.get("bssid", "")) not in cred_bsids:
+                lines.append(
+                    f"> **{r.get('ssid', '?')}**: Ninguna clave recuperada en esta sesion."
+                )
+        lines.append("")
+    else:
+        lines += ["- Ninguna clave recuperada en esta sesion.", ""]
+
+    # ── Veredictos de seguridad observados en esta ronda ───────────────────────
+    lines += ["## Vulnerabilidades verificadas", ""]
+    for r in session_results:
+        vulns = _verified_vulnerabilities(r)
+        if vulns:
+            for v in vulns:
+                lines.append(f"- **{r.get('ssid', '?')}**: {v}")
+        else:
+            lines.append(
+                f"- **{r.get('ssid', '?')}**: sin vulnerabilidades verificadas en esta ronda."
+            )
+    lines.append("")
+
     lines += [
         "---",
         "",
@@ -304,11 +468,13 @@ def generate_markdown_report(
     ]
 
     # ── Resultados individuales ────────────────────────────────────────────────
+    # Secciones opcionales que no lograron renderizarse (no crashean el informe)
+    render_notes: List[str] = []
     for idx, result in enumerate(session_results, 1):
-        ssid   = result.get("ssid", "?")
-        bssid  = result.get("bssid", "?")
-        res    = result.get("result", "?")
-        path   = result.get("path", [])
+        ssid = result.get("ssid", "?")
+        bssid = result.get("bssid", "?")
+        res = result.get("result", "?")
+        path = result.get("path", [])
         alerts = result.get("wids_alerts", 0)
         elapsed = result.get("elapsed_sec", "?")
 
@@ -350,30 +516,34 @@ def generate_markdown_report(
         # ── Perfil de fabricante + deuda histórica (offline) ─────────────────
         try:
             from .vendor_profiles import render_vendor_section_md
+
             lines += render_vendor_section_md(result)
         except Exception:
-            pass
+            render_notes.append(f"note_render_vendor ({ssid}): sección omitida")
 
         # ── Superficie LAN (si se auditó con --allow-lan) ─────────────────────
         try:
             from .lan_audit import render_lan_section_md
+
             lines += render_lan_section_md(result)
         except Exception:
-            pass
+            render_notes.append(f"note_render_lan ({ssid}): sección omitida")
 
         # ── Gobernanza EOL ───────────────────────────────────────────────────
         try:
             from .vendor_profiles import render_eol_section_md
+
             lines += render_eol_section_md(result)
         except Exception:
-            pass
+            render_notes.append(f"note_render_eol ({ssid}): sección omitida")
 
         # ── Onboarding DPP ───────────────────────────────────────────────────
         try:
             from .vendor_profiles import render_dpp_section_md
+
             lines += render_dpp_section_md(result)
         except Exception:
-            pass
+            render_notes.append(f"note_render_dpp ({ssid}): sección omitida")
 
         lines += [
             f"#### Hallazgo: {finding.get('headline', '')}",
@@ -409,7 +579,7 @@ def generate_markdown_report(
                 m = MITRE_ATTACK[phase]
                 framework = m.get("type", "ATT&CK")
                 lines.append(
-                    f"| `{phase}` | [{m['id']}](https://attack.mitre.org/techniques/{m['id'].replace('.','/')}) | "
+                    f"| `{phase}` | [{m['id']}](https://attack.mitre.org/techniques/{m['id'].replace('.', '/')}) | "
                     f"{m['name']} | {m['tactic']} ({framework}) |"
                 )
                 seen_mitre.add(phase)
@@ -427,27 +597,27 @@ def generate_markdown_report(
     ]
 
     for result in session_results:
-        rec_k = result.get('recovered_key')
+        rec_k = result.get("recovered_key")
         if rec_k:
             lines.append(
-                f"| {result.get('ssid','?')} ({result.get('bssid','?')}) | "
-                f"{result.get('brand','?')} | "
+                f"| {result.get('ssid', '?')} ({result.get('bssid', '?')}) | "
+                f"{result.get('brand', '?')} | "
                 f"**SÍ (`{rec_k}`)** | "
                 f"Actualizar firmware de fábrica: forzar generador CSPRNG para PSK, desactivar WPS por defecto e implementar WPA3-SAE obligatorio | "
                 f"**CRÍTICA** |"
             )
         elif result.get("result") == "eol_confirmed":
             lines.append(
-                f"| {result.get('ssid','?')} ({result.get('bssid','?')}) | "
-                f"{result.get('brand','?')} | "
+                f"| {result.get('ssid', '?')} ({result.get('bssid', '?')}) | "
+                f"{result.get('brand', '?')} | "
                 f"No detectada | "
                 f"Solicitar actualización de firmware al ISP vía canal de soporte oficial (parche EOL) | "
                 f"**ALTA** |"
             )
         elif result.get("result") in ("cracked", "class_confirmed"):
             lines.append(
-                f"| {result.get('ssid','?')} ({result.get('bssid','?')}) | "
-                f"{result.get('brand','?')} | "
+                f"| {result.get('ssid', '?')} ({result.get('bssid', '?')}) | "
+                f"{result.get('brand', '?')} | "
                 f"Vulnerable a clase WPS | "
                 f"Deshabilitar WPS inmediatamente. Cambiar PSK. Solicitar revisión de configuración de fábrica | "
                 f"**CRÍTICA** |"
@@ -495,6 +665,14 @@ def generate_markdown_report(
         f"*Generado: {timestamp} | AURIS v2 — Proyecto de Tesis*",
     ]
 
+    # Secciones omitidas durante el render (visibles, sin quebrar el informe)
+    if render_notes:
+        lines += [
+            "",
+            "*Notas de renderizado:*",
+            *[f"{n}" for n in render_notes],
+        ]
+
     content = "\n".join(lines)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -523,22 +701,46 @@ def generate_json_report(
     ]
 
     payload = {
-        "auris_version":   "2.0",
-        "generated_at":    datetime.now().isoformat(),
-        "scope":           scope,
+        "auris_version": "2.0",
+        "generated_at": datetime.now().isoformat(),
+        "scope": scope,
         "mitre_framework": list(MITRE_ATTACK.values()),
-        "results":         session_results,
+        "results": session_results,
         "summary": {
-            "total_targets":          len(session_results),
-            "critical":               sum(1 for r in session_results if r.get("result") == "cracked"),
-            "high":                   sum(1 for r in session_results if r.get("result") in ("class_confirmed", "eol_confirmed")),
-            "low":                    sum(1 for r in session_results if r.get("result") in ("exhausted", "locked")),
-            "total_wids_alerts":      sum(r.get("wids_alerts", 0) for r in session_results),
+            "total_targets": len(session_results),
+            "critical": sum(1 for r in session_results if r.get("result") == "cracked"),
+            "high": sum(
+                1
+                for r in session_results
+                if r.get("result") in ("class_confirmed", "eol_confirmed")
+            ),
+            "low": sum(
+                1 for r in session_results if r.get("result") in ("exhausted", "locked")
+            ),
+            "total_wids_alerts": sum(r.get("wids_alerts", 0) for r in session_results),
             "compromised_keys_count": len(recovered_creds),
-            "recovered_credentials":  recovered_creds,
+            "recovered_credentials": recovered_creds,
         },
     }
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, default=str, ensure_ascii=False)
     return output_path
+
+
+def write_passwords_file(
+    session_results: List[Dict[str, Any]], output_path: str
+) -> int:
+    """Escribe un catalogo de claves en texto plano: SSID;BSSID;tipo;clave.
+
+    Source única de filas: _collect_credentials (favorece campos del result).
+    Con cero claves NO crea el archivo y retorna 0 (quien llama decide qué avisar).
+    """
+    creds = _collect_credentials(session_results)
+    if not creds:
+        return 0
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("SSID;BSSID;tipo;clave\n")
+        for c in creds:
+            f.write(f"{c['ssid']};{c['bssid']};{c['tipo']};{c['key']}\n")
+    return len(creds)
