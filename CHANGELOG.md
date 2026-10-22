@@ -8,6 +8,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 ## [No publicado]
 
 ### Añadido
+- Integración funcional completa de Broadcom WPS: catálogo offline de 57
+  equipos afectados y 4 parcheados (`data/seed/broadcom_affected.csv`),
+  `src/auris/broadcom.py` (lookup, orquestación del fingerprinter y escaneo
+  YARA) y `auris broadcom` con tres modos (`--lookup`, `--firmware`,
+  `--interface`+`--ssid`). Los artefactos quedan en
+  `evidence/broadcom-fingerprint-<ts>/` y `auris doctor` reporta `yara`/`uv`.
 - Inteligencia Broadcom vendorizada en `research/broadcom-wps/` (MIT, commit
   `0727296`): fingerprinter `wps_monitor` vs `hostapd`, reglas YARA ELF32
   ARM/MIPS y `VENDOR.md` con procedencia y límites. Subcomando nuevo

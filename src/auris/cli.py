@@ -343,46 +343,132 @@ def candidates_command(
 
 @app.command(name="broadcom")
 def broadcom_command(
-    interface: str = typer.Option(..., help="Interfaz YA en modo monitor (ej: wlan0mon)"),
-    ssid: str = typer.Option(..., help="SSID exacto del AP objetivo"),
+    interface: Optional[str] = typer.Option(
+        None, help="Interfaz YA en modo monitor (modo fingerprint)"
+    ),
+    ssid: Optional[str] = typer.Option(None, help="SSID exacto del AP (modo fingerprint)"),
+    lookup_vendor: Optional[str] = typer.Option(
+        None, "--lookup", help="Fabricante a consultar en el catálogo offline"
+    ),
+    model: str = typer.Option("", "--model", help="Modelo/producto para --lookup"),
+    firmware: Optional[str] = typer.Option(
+        None, "--firmware", help="Archivo o directorio de firmware para YARA"
+    ),
     debug_assoc: bool = typer.Option(
         False, "--debug-assoc", help="Loguear códigos de autenticación/asociación 802.11"
     ),
 ):
     """
-    Fingerprint Broadcom WPS (wps_monitor vs hostapd) sobre una interfaz en
-    modo monitor. Delega en research/broadcom-wps/broadcom_fingerprint.py:
-    requiere `uv` o Python 3.11+ con `scapy`, y confirmación RoE del objetivo.
+    Investigación Broadcom WPS (research/broadcom-wps). Tres modos:
+
+      --lookup FABRICANTE [--model MODELO]   catálogo offline de equipos
+      --firmware RUTA                        reglas YARA sobre firmware extraído
+      --interface IF --ssid SSID             fingerprint en vivo (monitor mode)
     """
-    import shutil
-    import subprocess
-    import sys
+    from rich.table import Table
 
-    project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    script = os.path.join(project_dir, "research", "broadcom-wps", "broadcom_fingerprint.py")
-    if not os.path.isfile(script):
-        console.print("[red][ERR][/red] No se encontró research/broadcom-wps/broadcom_fingerprint.py")
+    from .broadcom import BroadcomError, fingerprint, lookup, scan_firmware
+
+    chosen = sum(bool(value) for value in (lookup_vendor, firmware, interface or ssid))
+    if chosen == 0:
+        console.print(
+            "[yellow][WARN][/yellow] Elegí un modo: --lookup, --firmware o --interface/--ssid"
+        )
+        console.print("[dim]  auris broadcom --help[/dim]")
+        raise typer.Exit(1)
+    if chosen > 1:
+        console.print(
+            "[red][ERR][/red] Los modos --lookup, --firmware y --interface/--ssid"
+            " son mutuamente excluyentes"
+        )
         raise typer.Exit(1)
 
-    args = ["--interface", interface, "--ssid", ssid]
-    if debug_assoc:
-        args.append("--debug-assoc")
-
-    if shutil.which("uv"):
-        cmd = ["uv", "run", "--with", "scapy", script, *args]
-    elif sys.version_info >= (3, 11):
+    if lookup_vendor:
         try:
-            import scapy  # noqa: F401
-        except ImportError:
-            console.print("[red][ERR][/red] Falta scapy: pip install scapy (o instala uv)")
+            matches = lookup(lookup_vendor, model)
+        except BroadcomError as exc:
+            console.print(f"[red][ERR][/red] {exc}")
             raise typer.Exit(1)
-        cmd = [sys.executable, script, *args]
-    else:
-        console.print("[red][ERR][/red] El fingerprinter requiere Python 3.11+ o uv.")
+        console.print(
+            Rule(f"[bold cyan]Equipos Broadcom — {lookup_vendor}[/bold cyan]", style="cyan")
+        )
+        if not matches:
+            console.print("  [yellow][WARN][/yellow] Sin coincidencias en el catálogo offline.")
+            raise typer.Exit(0)
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Estado")
+        table.add_column("Fabricante")
+        table.add_column("Producto")
+        table.add_column("Versiones")
+        table.add_column("ISPs")
+        for match in matches:
+            status = (
+                "[red]AFECTADO[/red]"
+                if match.status == "affected"
+                else "[green]PARCHEADO[/green]"
+            )
+            table.add_row(
+                status,
+                match.vendor,
+                match.product,
+                match.versions or "-",
+                match.isps or "-",
+            )
+        console.print(table)
+        raise typer.Exit(0)
+
+    if firmware:
+        try:
+            matches = scan_firmware(firmware)
+        except BroadcomError as exc:
+            console.print(f"[red][ERR][/red] {exc}")
+            raise typer.Exit(1)
+        console.print(
+            Rule("[bold cyan]Reglas YARA — Broadcom WPS Monitor[/bold cyan]", style="cyan")
+        )
+        if not matches:
+            console.print("  [green][OK][/green] Sin coincidencias en el firmware analizado.")
+            raise typer.Exit(0)
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Regla", style="bold")
+        table.add_column("Archivo")
+        for match in matches:
+            table.add_row(match.rule, match.path)
+        console.print(table)
+        raise typer.Exit(0)
+
+    try:
+        run = fingerprint(interface or "", ssid or "", debug_assoc=debug_assoc)
+    except BroadcomError as exc:
+        console.print(f"[red][ERR][/red] {exc}")
         raise typer.Exit(1)
 
-    console.print(f"  [dim]{' '.join(cmd)}[/dim]")
-    raise typer.Exit(subprocess.call(cmd))
+    console.print(Rule("[bold cyan]Broadcom WPS — resultado[/bold cyan]", style="cyan"))
+    table = Table(show_header=False, box=None)
+    table.add_column("Campo", style="bold cyan")
+    table.add_column("Valor")
+    color = {
+        "LIKELY_VULNERABLE": "red",
+        "PATCHED_HOSTAPD": "green",
+    }.get(run.assessment, "yellow")
+    table.add_row("SSID", ssid or "?")
+    table.add_row("BSSID", run.bssid)
+    table.add_row("Canal", str(run.channel))
+    table.add_row("Vendor", run.vendor)
+    table.add_row("Model", run.model)
+    table.add_row("Assessment", f"[{color}]{run.assessment}[/{color}]")
+    table.add_row("Implementation", run.implementation)
+    table.add_row("Target health", run.target_health)
+    if run.evidence:
+        table.add_row("Evidencia", ", ".join(run.evidence))
+    if run.json_path:
+        table.add_row("JSON", run.json_path)
+    if run.pcap_path:
+        table.add_row("PCAP", run.pcap_path)
+    console.print(table)
+    if run.warning:
+        console.print(f"  [yellow][WARN][/yellow] {run.warning}")
+    raise typer.Exit(run.returncode)
 
 
 @app.command(name="run-all")

@@ -19,19 +19,31 @@ Broadcom. No fue modificado.
 ## Uso dentro de AURIS
 
 ```bash
-# Interfaz ya en modo monitor (auris run-all la crea y restaura por su cuenta)
-sudo auris broadcom --interface wlan0mon --ssid "MOVISTAR_XXXX"
+# Catálogo offline (data/seed/broadcom_affected.csv, generado del README)
+auris broadcom --lookup Askey
+auris broadcom --lookup Sagemcom --model F5598T
 
-# Equivalente directo con uv (lo que hace el subcomando)
+# Firmware extraído con las reglas YARA
+auris broadcom --firmware /ruta/firmware_extraido
+
+# Fingerprint en vivo (interfaz ya en modo monitor)
+sudo auris broadcom --interface wlan0mon --ssid "MOVISTAR_XXXX"
+```
+
+Implementación: `src/auris/broadcom.py` (catálogo, parser de `result.json` y
+de la salida YARA) y el subcomando `auris broadcom` en `src/auris/cli.py`.
+`auris doctor` reporta los artefactos, `yara` y `uv`.
+
+Equivalente directo, sin AURIS:
+
+```bash
 sudo uv run --with scapy research/broadcom-wps/broadcom_fingerprint.py \
     --interface wlan0mon --ssid "MOVISTAR_XXXX"
-
-# Análisis estático de firmware
 yara -w -r research/broadcom-wps/broadcom_wps_monitor.yar firmware_extraido/
 ```
 
-Artefactos por corrida: `result.json` y `traffic.pcap` en un directorio
-`broadcom-fingerprint-<timestamp>/` bajo el directorio actual.
+Artefactos por corrida: `evidence/broadcom-fingerprint-<timestamp>/`
+(`result.json` + `traffic.pcap`), ignorados por git.
 
 ## Límites y ética
 

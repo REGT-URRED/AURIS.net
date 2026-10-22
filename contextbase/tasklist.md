@@ -6,6 +6,11 @@ Seguimiento del estado de tareas con alto contraste visual.
 
 ## Tareas Completadas
 
+- [x] Catálogo offline de equipos Broadcom (`data/seed/broadcom_affected.csv`)
+- [x] `auris broadcom` con modos `--lookup`, `--firmware` y fingerprint
+- [x] Reporte de artefactos Broadcom en `auris doctor`
+- [x] Tests de catálogo, parser YARA y orquestación del fingerprint
+
 - [x] Push de `main` a `REGT-URRED/AURIS.net` (4 commits)
 - [x] Issue upstream publicado: qkaiser/broadcom-wps#28
 - [x] Agregar `LICENSE` MIT (el README ya lo declaraba)

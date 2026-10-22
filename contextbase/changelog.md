@@ -7,6 +7,21 @@ evolución del sistema. Formato basado en Keep a Changelog.
 
 ## Cambios Realizados
 
+### 2026-10-22 — Integración funcional completa de Broadcom WPS
+
+- `src/auris/broadcom.py`: catálogo offline (`lookup`), orquestación del
+  fingerprinter (`fingerprint`, artefactos en `evidence/`) y escaneo YARA
+  (`scan_firmware`, parser de salida). AURIS no importa scapy: ejecuta el
+  script vendorizado como subproceso.
+- `data/seed/broadcom_affected.csv`: 57 equipos afectados y 4 parcheados
+  extraídos del README upstream (consulta sin red).
+- `auris broadcom` pasa a tres modos mutuamente excluyentes: `--lookup`,
+  `--firmware` y `--interface`+`--ssid`; `auris doctor` reporta artefactos,
+  `yara` y `uv`.
+- Tests nuevos en `tests/test_broadcom_catalog.py` (catálogo, parser YARA,
+  fingerprint con runner inyectado, modos del CLI). Suite: 137 passed,
+  14 skipped.
+
 ### 2026-10-20 — Publicación en GitHub
 
 - Push de `main` a `REGT-URRED/AURIS.net`: `baa378f`, `a24a16e`, `cc7dd3a`,

@@ -182,6 +182,32 @@ def check_contextbase(project_dir: str) -> List[CheckResult]:
     return results
 
 
+def check_broadcom(project_dir: str) -> List[CheckResult]:
+    """Verifica los artefactos vendorizados y las herramientas opcionales."""
+    results = []
+    vendor = os.path.join(project_dir, "research", "broadcom-wps")
+    missing = [
+        name
+        for name in ("broadcom_fingerprint.py", "broadcom_wps_monitor.yar")
+        if not os.path.isfile(os.path.join(vendor, name))
+    ]
+    if missing:
+        results.append(CheckResult(
+            "Broadcom intel", "warn",
+            f"faltan artefactos en research/broadcom-wps: {', '.join(missing)}",
+        ))
+    else:
+        results.append(CheckResult(
+            "Broadcom intel", "ok", "fingerprinter + reglas YARA",
+        ))
+    for tool, hint in (("yara", "sudo apt install yara"), ("uv", "opcional para scapy")):
+        path = shutil.which(tool)
+        results.append(CheckResult(
+            tool, "ok" if path else "warn", path or f"no encontrado — {hint}",
+        ))
+    return results
+
+
 def check_root() -> CheckResult:
     """Verifica si se está ejecutando con privilegios necesarios."""
     if os.geteuid() == 0:
@@ -266,6 +292,10 @@ def run_doctor(project_dir: Optional[str] = None) -> bool:
     # ── 7. Memoria técnica persistente ────────────────────────────────────────
     header("Memoria técnica")
     results.extend(check_contextbase(project_dir))
+
+    # ── 8. Inteligencia Broadcom ──────────────────────────────────────────────
+    header("Inteligencia Broadcom")
+    results.extend(check_broadcom(project_dir))
 
 
     # ── Imprimir tabla de resultados ──────────────────────────────────────────

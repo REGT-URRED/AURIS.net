@@ -95,20 +95,27 @@ contexto técnico que debe sobrevivir entre sesiones y entre agentes de código.
 Los timeouts viven en `runner.py` (`PHASE_TIMEOUTS`) y el corte por credencial
 en `ATTACK_PHASES`.
 
-### 3.4 Investigación vendorizada (`research/broadcom-wps/`)
+### 3.4 Inteligencia Broadcom (`research/broadcom-wps/` + `src/auris/broadcom.py`)
 
 Código MIT de `qkaiser/broadcom-wps` (commit `0727296`) para CPEs con SDK
-Broadcom. No forma parte del runtime de `src/auris`; se invoca por el
-subcomando `auris broadcom` o directamente.
+Broadcom, integrado en tres capas:
 
 - `broadcom_fingerprint.py`: distingue `wps_monitor` (vulnerable) de `hostapd`
   parcheado combinando el IE propietario de Broadcom con la respuesta a un
   primer fragmento EAP-WPS de longitud cero. Requiere monitor mode, `scapy` y
-  Python 3.11+ (o `uv`).
+  Python 3.11+ (o `uv`). AURIS lo ejecuta como subproceso: nunca importa scapy.
 - `broadcom_wps_monitor.yar`: reglas estáticas ELF32 ARM/MIPS para firmware.
-- `VENDOR.md`: procedencia, licencia, uso y límites. El resultado
-  `LIKELY_VULNERABLE` es evidencia de familia de implementación, no prueba de
-  explotabilidad.
+- `data/seed/broadcom_affected.csv`: catálogo generado desde el README
+  upstream (57 afectados + 4 parcheados) para consulta offline.
+- `src/auris/broadcom.py`: `lookup()`, `fingerprint()` (parsea `result.json` y
+  escribe artefactos en `evidence/broadcom-fingerprint-<ts>/`) y
+  `scan_firmware()` (parser de la salida `yara`).
+- Subcomando `auris broadcom` con tres modos mutuamente excluyentes:
+  `--lookup`, `--firmware`, `--interface`+`--ssid`. `auris doctor` reporta los
+  artefactos, `yara` y `uv`.
+
+`LIKELY_VULNERABLE` es evidencia de familia de implementación, no prueba de
+explotabilidad. `PATCHED_HOSTAPD` no exime de revisar el resto de la superficie.
 
 ### 3.5 Deuda técnica conocida
 
@@ -119,6 +126,8 @@ subcomando `auris broadcom` o directamente.
   PyUSB instalado por defecto: la operación es por herramientas del sistema.
 - `auris broadcom` depende de `uv` o de `scapy` en Python 3.11+; no está en
   `requirements.txt` para no cargar el bundle offline.
+- El catálogo CSV se regenera a mano desde el README upstream; no hay script
+  de sincronización (los cambios de upstream requieren re-vendorizar).
 
 ---
 

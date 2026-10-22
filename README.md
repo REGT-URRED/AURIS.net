@@ -215,19 +215,27 @@ PYTHONPATH=src pytest tests/ -v
 ## Inteligencia Broadcom (research/broadcom-wps)
 
 Código MIT de [qkaiser/broadcom-wps](https://github.com/qkaiser/broadcom-wps)
-vendorizado para evaluar CPEs con SDK Broadcom. Detecta dos cosas: si el AP
-expone el IE propietario de Broadcom y si responde como `wps_monitor`
-(vulnerable) o como `hostapd` parcheado. No explota nada.
+vendorizado para evaluar CPEs con SDK Broadcom. Detecta si el AP expone el IE
+propietario y si responde como `wps_monitor` (vulnerable) o `hostapd`
+parcheado. No explota nada. El catálogo de equipos del README upstream se
+versiona como `data/seed/broadcom_affected.csv` y se consulta sin red.
 
 ```bash
-# Requiere interfaz en modo monitor + uv (o Python 3.11+ con scapy)
-sudo auris broadcom --interface wlan0mon --ssid "MOVISTAR_XXXX"
+# 1) Catálogo offline: afectados y parcheados por fabricante/modelo
+auris broadcom --lookup Askey
+auris broadcom --lookup Sagemcom --model F5598T
 
-# Análisis estático de firmware extraído
-yara -w -r research/broadcom-wps/broadcom_wps_monitor.yar firmware_extraido/
+# 2) Firmware extraído con las reglas YARA (requiere el binario `yara`)
+sudo apt install yara
+auris broadcom --firmware /ruta/al/firmware_extraido
+
+# 3) Fingerprint en vivo (interfaz ya en modo monitor; uv o Python 3.11+ con scapy)
+sudo auris broadcom --interface wlan0mon --ssid "MOVISTAR_XXXX"
 ```
 
-Detalles, procedencia y límites: `research/broadcom-wps/VENDOR.md`.
+El fingerprint deja `result.json` y `traffic.pcap` en
+`evidence/broadcom-fingerprint-<timestamp>/`. Detalles, procedencia y límites:
+`research/broadcom-wps/VENDOR.md`.
 
 ## Memoria Técnica Persistente (contextbase)
 

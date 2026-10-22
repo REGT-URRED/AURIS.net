@@ -63,7 +63,7 @@ def test_subcomando_registrado():
     assert "broadcom" in names
 
 
-def test_subcomando_exige_interface_y_ssid():
+def test_subcomando_sin_modo_falla():
     result = CliRunner().invoke(app, ["broadcom"])
-    assert result.exit_code == 2
-    assert "Missing option" in result.output
+    assert result.exit_code == 1
+    assert "modo" in result.output.lower()
